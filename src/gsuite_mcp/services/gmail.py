@@ -4,6 +4,7 @@
 import base64
 import logging
 import os
+from pathlib import Path
 from typing import List, Dict, Any, Optional, Union
 from email.mime.text import MIMEText
 from email.mime.multipart import MIMEMultipart
@@ -739,6 +740,220 @@ class GmailService:
 
         except HttpError as error:
             logger.error(f"Error sending draft {draft_id}: {error}")
+            raise
+
+    @retry_with_backoff
+    def get_attachment(
+        self,
+        message_id: str,
+        attachment_id: str,
+    ) -> Dict[str, Any]:
+        """Get a message attachment.
+
+        Args:
+            message_id: Message ID containing the attachment
+            attachment_id: Attachment ID
+
+        Returns:
+            Attachment data (base64 encoded)
+        """
+        try:
+            attachment = (
+                self._service.users()
+                .messages()
+                .attachments()
+                .get(userId=self._user_id, messageId=message_id, id=attachment_id)
+                .execute()
+            )
+
+            return attachment
+
+        except HttpError as error:
+            logger.error(f"Error getting attachment {attachment_id}: {error}")
+            raise
+
+    def download_attachment(
+        self,
+        message_id: str,
+        attachment_id: str,
+        output_path: Path,
+    ) -> Path:
+        """Download attachment to file.
+
+        Args:
+            message_id: Message ID containing the attachment
+            attachment_id: Attachment ID
+            output_path: Path to save attachment
+
+        Returns:
+            Path to saved file
+        """
+        attachment = self.get_attachment(message_id, attachment_id)
+        data = base64.urlsafe_b64decode(attachment['data'])
+
+        output_path = Path(output_path)
+        output_path.parent.mkdir(parents=True, exist_ok=True)
+
+        with open(output_path, 'wb') as f:
+            f.write(data)
+
+        logger.info(f"Attachment saved to {output_path}")
+        return output_path
+
+    @retry_with_backoff
+    def send_message_with_attachment(
+        self,
+        to: str,
+        subject: str,
+        body: str,
+        attachment_path: Path,
+        cc: Optional[str] = None,
+        bcc: Optional[str] = None,
+        html: bool = False,
+    ) -> Dict[str, Any]:
+        """Send an email with an attachment.
+
+        Args:
+            to: Recipient email address
+            subject: Email subject
+            body: Email body content
+            attachment_path: Path to file to attach
+            cc: CC recipients
+            bcc: BCC recipients
+            html: If True, body is HTML
+
+        Returns:
+            Sent message metadata
+        """
+        try:
+            message = self._create_message_with_attachment(
+                to=to,
+                subject=subject,
+                body=body,
+                attachment_path=attachment_path,
+                cc=cc,
+                bcc=bcc,
+                html=html,
+            )
+
+            sent_message = (
+                self._service.users()
+                .messages()
+                .send(userId=self._user_id, body=message)
+                .execute()
+            )
+
+            logger.info(f"Message with attachment sent. ID: {sent_message['id']}")
+            return sent_message
+
+        except HttpError as error:
+            logger.error(f"Error sending message with attachment: {error}")
+            raise
+
+    def _create_message_with_attachment(
+        self,
+        to: str,
+        subject: str,
+        body: str,
+        attachment_path: Path,
+        cc: Optional[str] = None,
+        bcc: Optional[str] = None,
+        html: bool = False,
+    ) -> Dict[str, str]:
+        """Create a message with attachment.
+
+        Args:
+            to: Recipient email
+            subject: Email subject
+            body: Email body
+            attachment_path: Path to attachment file
+            cc: CC recipients
+            bcc: BCC recipients
+            html: Whether body is HTML
+
+        Returns:
+            Message dictionary ready for API
+        """
+        message = MIMEMultipart()
+        message['to'] = to
+        message['subject'] = subject
+
+        if cc:
+            message['cc'] = cc
+        if bcc:
+            message['bcc'] = bcc
+
+        # Add body
+        body_part = MIMEText(body, 'html' if html else 'plain')
+        message.attach(body_part)
+
+        # Add attachment
+        attachment_path = Path(attachment_path)
+
+        with open(attachment_path, 'rb') as f:
+            attachment = MIMEBase('application', 'octet-stream')
+            attachment.set_payload(f.read())
+            encoders.encode_base64(attachment)
+            attachment.add_header(
+                'Content-Disposition',
+                f'attachment; filename= {attachment_path.name}'
+            )
+            message.attach(attachment)
+
+        raw_message = base64.urlsafe_b64encode(message.as_bytes()).decode()
+        return {'raw': raw_message}
+
+    @retry_with_backoff
+    def batch_modify_messages(
+        self,
+        message_ids: List[str],
+        add_labels: Optional[List[str]] = None,
+        remove_labels: Optional[List[str]] = None,
+    ) -> None:
+        """Modify labels on multiple messages at once.
+
+        Args:
+            message_ids: List of message IDs to modify
+            add_labels: Label IDs to add
+            remove_labels: Label IDs to remove
+        """
+        try:
+            body = {'ids': message_ids}
+
+            if add_labels:
+                body['addLabelIds'] = add_labels
+
+            if remove_labels:
+                body['removeLabelIds'] = remove_labels
+
+            self._service.users().messages().batchModify(
+                userId=self._user_id,
+                body=body
+            ).execute()
+
+            logger.info(f"Batch modified {len(message_ids)} messages")
+
+        except HttpError as error:
+            logger.error(f"Error batch modifying messages: {error}")
+            raise
+
+    @retry_with_backoff
+    def batch_delete_messages(self, message_ids: List[str]) -> None:
+        """Permanently delete multiple messages at once.
+
+        Args:
+            message_ids: List of message IDs to delete
+        """
+        try:
+            self._service.users().messages().batchDelete(
+                userId=self._user_id,
+                body={'ids': message_ids}
+            ).execute()
+
+            logger.info(f"Batch deleted {len(message_ids)} messages")
+
+        except HttpError as error:
+            logger.error(f"Error batch deleting messages: {error}")
             raise
 
     @staticmethod
