@@ -550,6 +550,197 @@ class GmailService:
             logger.error(f"Error deleting label {label_id}: {error}")
             raise
 
+    @retry_with_backoff
+    def list_drafts(self, max_results: int = 100) -> List[Dict[str, Any]]:
+        """List draft messages.
+
+        Args:
+            max_results: Maximum number of drafts to return
+
+        Returns:
+            List of draft metadata
+        """
+        try:
+            response = (
+                self._service.users()
+                .drafts()
+                .list(userId=self._user_id, maxResults=max_results)
+                .execute()
+            )
+
+            return response.get('drafts', [])
+
+        except HttpError as error:
+            logger.error(f"Error listing drafts: {error}")
+            raise
+
+    @retry_with_backoff
+    def get_draft(self, draft_id: str) -> Dict[str, Any]:
+        """Get a specific draft by ID.
+
+        Args:
+            draft_id: The draft ID
+
+        Returns:
+            Draft data including message content
+        """
+        try:
+            draft = (
+                self._service.users()
+                .drafts()
+                .get(userId=self._user_id, id=draft_id)
+                .execute()
+            )
+            return draft
+
+        except HttpError as error:
+            logger.error(f"Error getting draft {draft_id}: {error}")
+            raise
+
+    @retry_with_backoff
+    def create_draft(
+        self,
+        to: str,
+        subject: str,
+        body: str,
+        cc: Optional[str] = None,
+        bcc: Optional[str] = None,
+        html: bool = False,
+    ) -> Dict[str, Any]:
+        """Create a draft message.
+
+        Args:
+            to: Recipient email address
+            subject: Email subject
+            body: Email body content
+            cc: CC recipients
+            bcc: BCC recipients
+            html: If True, body is HTML
+
+        Returns:
+            Created draft metadata
+        """
+        try:
+            message = self._create_message(
+                to=to,
+                subject=subject,
+                body=body,
+                cc=cc,
+                bcc=bcc,
+                html=html,
+            )
+
+            draft = (
+                self._service.users()
+                .drafts()
+                .create(userId=self._user_id, body={'message': message})
+                .execute()
+            )
+
+            logger.info(f"Draft created successfully. ID: {draft['id']}")
+            return draft
+
+        except HttpError as error:
+            logger.error(f"Error creating draft: {error}")
+            raise
+
+    @retry_with_backoff
+    def update_draft(
+        self,
+        draft_id: str,
+        to: str,
+        subject: str,
+        body: str,
+        cc: Optional[str] = None,
+        bcc: Optional[str] = None,
+        html: bool = False,
+    ) -> Dict[str, Any]:
+        """Update an existing draft.
+
+        Args:
+            draft_id: Draft ID to update
+            to: Recipient email address
+            subject: Email subject
+            body: Email body content
+            cc: CC recipients
+            bcc: BCC recipients
+            html: If True, body is HTML
+
+        Returns:
+            Updated draft metadata
+        """
+        try:
+            message = self._create_message(
+                to=to,
+                subject=subject,
+                body=body,
+                cc=cc,
+                bcc=bcc,
+                html=html,
+            )
+
+            draft = (
+                self._service.users()
+                .drafts()
+                .update(
+                    userId=self._user_id,
+                    id=draft_id,
+                    body={'message': message}
+                )
+                .execute()
+            )
+
+            logger.info(f"Draft {draft_id} updated successfully")
+            return draft
+
+        except HttpError as error:
+            logger.error(f"Error updating draft {draft_id}: {error}")
+            raise
+
+    @retry_with_backoff
+    def delete_draft(self, draft_id: str) -> None:
+        """Delete a draft.
+
+        Args:
+            draft_id: Draft ID to delete
+        """
+        try:
+            self._service.users().drafts().delete(
+                userId=self._user_id,
+                id=draft_id
+            ).execute()
+
+            logger.info(f"Draft {draft_id} deleted successfully")
+
+        except HttpError as error:
+            logger.error(f"Error deleting draft {draft_id}: {error}")
+            raise
+
+    @retry_with_backoff
+    def send_draft(self, draft_id: str) -> Dict[str, Any]:
+        """Send a draft message.
+
+        Args:
+            draft_id: Draft ID to send
+
+        Returns:
+            Sent message metadata
+        """
+        try:
+            sent_message = (
+                self._service.users()
+                .drafts()
+                .send(userId=self._user_id, body={'id': draft_id})
+                .execute()
+            )
+
+            logger.info(f"Draft {draft_id} sent successfully. Message ID: {sent_message['id']}")
+            return sent_message
+
+        except HttpError as error:
+            logger.error(f"Error sending draft {draft_id}: {error}")
+            raise
+
     @staticmethod
     def _get_header(headers: List[Dict[str, str]], name: str) -> str:
         """Extract header value by name."""
