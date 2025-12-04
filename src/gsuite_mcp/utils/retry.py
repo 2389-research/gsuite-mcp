@@ -70,12 +70,6 @@ def retry_with_backoff(
                 time.sleep(delay)
                 delay *= backoff_factor
 
-        # Should not reach here, but just in case
-        if last_exception:
-            raise last_exception
-
-        return func(*args, **kwargs)  # Final attempt
-
     return wrapper
 
 
