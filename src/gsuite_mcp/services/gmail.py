@@ -3,7 +3,8 @@
 
 import base64
 import logging
-from typing import List, Dict, Any, Optional
+import os
+from typing import List, Dict, Any, Optional, Union
 from email.mime.text import MIMEText
 from email.mime.multipart import MIMEMultipart
 from email.mime.base import MIMEBase
@@ -14,20 +15,69 @@ from googleapiclient.discovery import build
 from googleapiclient.errors import HttpError
 
 from gsuite_mcp.utils.retry import retry_with_backoff
+from gsuite_mcp.auth.fake_credentials import FakeCredentials
 
 logger = logging.getLogger(__name__)
 
 
 class GmailService:
-    """Service for Gmail API operations."""
+    """Service for Gmail API operations.
 
-    def __init__(self, credentials: Credentials):
+    Supports both production Google APIs and ish fake server for testing.
+    """
+
+    def __init__(
+        self,
+        credentials: Optional[Union[Credentials, FakeCredentials]] = None,
+        api_base_url: Optional[str] = None,
+        auth_token: Optional[str] = None,
+    ):
         """Initialize Gmail service.
 
         Args:
-            credentials: Valid OAuth2 credentials
+            credentials: Valid OAuth2 credentials or FakeCredentials for ish mode
+            api_base_url: Optional custom API base URL (for ish mode)
+            auth_token: Optional Bearer token for simple auth (for ish mode)
+
+        Environment variables for ish mode:
+            ISH_MODE: Set to "true" to enable ish mode
+            ISH_BASE_URL: Base URL for ish server (default: http://localhost:9000)
+            ISH_USER: Username for ish authentication (default: testuser)
         """
-        self._service = build('gmail', 'v1', credentials=credentials)
+        # Check for ish mode via environment
+        ish_mode = os.getenv("ISH_MODE", "").lower() == "true"
+        if ish_mode and not api_base_url:
+            api_base_url = os.getenv("ISH_BASE_URL", "http://localhost:9000")
+
+        # Create fake credentials if in ish mode and credentials not provided
+        if api_base_url and not credentials and not auth_token:
+            credentials = FakeCredentials()
+        elif api_base_url and auth_token and not credentials:
+            credentials = FakeCredentials(token=auth_token)
+
+        if not credentials:
+            raise ValueError("credentials are required unless using ish mode")
+
+        # Build the service with custom discovery URL if in ish mode
+        if api_base_url:
+            # In ish mode, use custom base URL for discovery
+            discovery_url = f"{api_base_url}/discovery/v1/apis/gmail/v1/rest"
+            logger.info(f"Initializing Gmail service in ish mode with base URL: {api_base_url}")
+            self._service = build(
+                'gmail',
+                'v1',
+                credentials=credentials,
+                discoveryServiceUrl=discovery_url,
+                static_discovery=False,
+            )
+            self._ish_mode = True
+            self._api_base_url = api_base_url
+        else:
+            # Production mode - use standard Google APIs
+            self._service = build('gmail', 'v1', credentials=credentials)
+            self._ish_mode = False
+            self._api_base_url = None
+
         self._user_id = 'me'
 
     @retry_with_backoff
