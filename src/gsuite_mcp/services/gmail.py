@@ -407,6 +407,149 @@ class GmailService:
             logger.error(f"Error trashing message {message_id}: {error}")
             raise
 
+    @retry_with_backoff
+    def list_labels(self) -> List[Dict[str, Any]]:
+        """List all labels in the user's mailbox.
+
+        Returns:
+            List of label dictionaries
+        """
+        try:
+            response = self._service.users().labels().list(userId=self._user_id).execute()
+            return response.get('labels', [])
+
+        except HttpError as error:
+            logger.error(f"Error listing labels: {error}")
+            raise
+
+    @retry_with_backoff
+    def get_label(self, label_id: str) -> Dict[str, Any]:
+        """Get a specific label by ID.
+
+        Args:
+            label_id: The label ID
+
+        Returns:
+            Label data dictionary
+        """
+        try:
+            label = (
+                self._service.users()
+                .labels()
+                .get(userId=self._user_id, id=label_id)
+                .execute()
+            )
+            return label
+
+        except HttpError as error:
+            logger.error(f"Error getting label {label_id}: {error}")
+            raise
+
+    @retry_with_backoff
+    def create_label(
+        self,
+        name: str,
+        label_list_visibility: str = "labelShow",
+        message_list_visibility: str = "show",
+    ) -> Dict[str, Any]:
+        """Create a new label.
+
+        Args:
+            name: Label name
+            label_list_visibility: Visibility in label list ('labelShow', 'labelHide')
+            message_list_visibility: Visibility in message list ('show', 'hide')
+
+        Returns:
+            Created label data
+        """
+        try:
+            label_object = {
+                'name': name,
+                'labelListVisibility': label_list_visibility,
+                'messageListVisibility': message_list_visibility,
+            }
+
+            created_label = (
+                self._service.users()
+                .labels()
+                .create(userId=self._user_id, body=label_object)
+                .execute()
+            )
+
+            logger.info(f"Label '{name}' created with ID: {created_label['id']}")
+            return created_label
+
+        except HttpError as error:
+            logger.error(f"Error creating label '{name}': {error}")
+            raise
+
+    @retry_with_backoff
+    def update_label(
+        self,
+        label_id: str,
+        name: Optional[str] = None,
+        label_list_visibility: Optional[str] = None,
+        message_list_visibility: Optional[str] = None,
+    ) -> Dict[str, Any]:
+        """Update an existing label.
+
+        Args:
+            label_id: Label ID to update
+            name: New label name
+            label_list_visibility: New label list visibility
+            message_list_visibility: New message list visibility
+
+        Returns:
+            Updated label data
+        """
+        try:
+            # Get current label to preserve unchanged fields
+            current_label = self.get_label(label_id)
+
+            label_object = {
+                'name': name or current_label['name'],
+                'id': label_id,
+            }
+
+            if label_list_visibility:
+                label_object['labelListVisibility'] = label_list_visibility
+
+            if message_list_visibility:
+                label_object['messageListVisibility'] = message_list_visibility
+
+            updated_label = (
+                self._service.users()
+                .labels()
+                .update(userId=self._user_id, id=label_id, body=label_object)
+                .execute()
+            )
+
+            logger.info(f"Label {label_id} updated successfully")
+            return updated_label
+
+        except HttpError as error:
+            logger.error(f"Error updating label {label_id}: {error}")
+            raise
+
+    @retry_with_backoff
+    def delete_label(self, label_id: str) -> None:
+        """Delete a label.
+
+        Args:
+            label_id: Label ID to delete
+        """
+        try:
+            self._service.users().labels().delete(
+                userId=self._user_id,
+                id=label_id
+            ).execute()
+
+            logger.info(f"Label {label_id} deleted successfully")
+
+        except HttpError as error:
+            logger.error(f"Error deleting label {label_id}: {error}")
+            raise
+
     @staticmethod
     def _get_header(headers: List[Dict[str, str]], name: str) -> str:
         """Extract header value by name."""
