@@ -1,7 +1,7 @@
 [project]
 name = "gsuite-mcp"
 version = "0.1.0"
-description = "Add your description here"
+description = "A comprehensive MCP server for Google Workspace APIs (Gmail, Calendar, People)"
 readme = "README.md"
 authors = [
     { name = "Harper Reed", email = "harper@nata2.org" }
