@@ -5,6 +5,7 @@ package test
 
 import (
 	"context"
+	"net"
 	"os"
 	"testing"
 	"time"
@@ -16,9 +17,24 @@ import (
 	"github.com/harper/gsuite-mcp/pkg/server"
 )
 
+// checkIshServerAvailable checks if the ish mock server is running
+func checkIshServerAvailable() bool {
+	conn, err := net.DialTimeout("tcp", "localhost:9000", 1*time.Second)
+	if err != nil {
+		return false
+	}
+	conn.Close()
+	return true
+}
+
 // setupIshMode configures environment for ish mode testing
 func setupIshMode(t *testing.T) func() {
 	t.Helper()
+
+	// Check if ish server is available
+	if !checkIshServerAvailable() {
+		t.Skip("Skipping integration test: ish mock server not available at localhost:9000")
+	}
 
 	// Save original values
 	originalIshMode := os.Getenv("ISH_MODE")

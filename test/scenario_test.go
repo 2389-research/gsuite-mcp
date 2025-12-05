@@ -5,6 +5,8 @@ package test
 
 import (
 	"context"
+	"net"
+	"os"
 	"testing"
 	"time"
 
@@ -16,6 +18,55 @@ import (
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 )
+
+// checkIshServerAvailable checks if the ish mock server is running
+func checkIshServerAvailable() bool {
+	conn, err := net.DialTimeout("tcp", "localhost:9000", 1*time.Second)
+	if err != nil {
+		return false
+	}
+	conn.Close()
+	return true
+}
+
+// setupIshMode configures environment for ish mode testing
+func setupIshMode(t *testing.T) func() {
+	t.Helper()
+
+	// Check if ish server is available
+	if !checkIshServerAvailable() {
+		t.Skip("Skipping scenario test: ish mock server not available at localhost:9000")
+	}
+
+	// Save original values
+	originalIshMode := os.Getenv("ISH_MODE")
+	originalIshBaseURL := os.Getenv("ISH_BASE_URL")
+	originalIshUser := os.Getenv("ISH_USER")
+
+	// Set ish mode
+	os.Setenv("ISH_MODE", "true")
+	os.Setenv("ISH_BASE_URL", "http://localhost:9000")
+	os.Setenv("ISH_USER", "testuser@example.com")
+
+	// Return cleanup function
+	return func() {
+		if originalIshMode == "" {
+			os.Unsetenv("ISH_MODE")
+		} else {
+			os.Setenv("ISH_MODE", originalIshMode)
+		}
+		if originalIshBaseURL == "" {
+			os.Unsetenv("ISH_BASE_URL")
+		} else {
+			os.Setenv("ISH_BASE_URL", originalIshBaseURL)
+		}
+		if originalIshUser == "" {
+			os.Unsetenv("ISH_USER")
+		} else {
+			os.Setenv("ISH_USER", originalIshUser)
+		}
+	}
+}
 
 // TestScenario_EmailTriage tests a realistic email triage workflow
 func TestScenario_EmailTriage(t *testing.T) {
@@ -273,13 +324,14 @@ func TestScenario_MCPServerIntegration(t *testing.T) {
 
 	t.Run("Verify all tools registered", func(t *testing.T) {
 		tools := srv.ListTools()
-		require.Len(t, tools, 6, "Expected 6 tools to be registered")
+		require.Len(t, tools, 19, "Expected 19 tools to be registered")
 
 		toolNames := make([]string, len(tools))
 		for i, tool := range tools {
 			toolNames[i] = tool.Name
 		}
 
+		// Verify core tools are present
 		assert.Contains(t, toolNames, "gmail_list_messages")
 		assert.Contains(t, toolNames, "gmail_send_message")
 		assert.Contains(t, toolNames, "calendar_list_events")
@@ -287,7 +339,7 @@ func TestScenario_MCPServerIntegration(t *testing.T) {
 		assert.Contains(t, toolNames, "people_search_contacts")
 		assert.Contains(t, toolNames, "people_get_contact")
 
-		t.Logf("All 6 MCP tools verified: %v", toolNames)
+		t.Logf("All 19 MCP tools verified: %v", toolNames)
 	})
 
 	t.Log("MCP server integration test complete")
