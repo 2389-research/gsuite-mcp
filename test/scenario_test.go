@@ -5,8 +5,6 @@ package test
 
 import (
 	"context"
-	"net"
-	"os"
 	"testing"
 	"time"
 
@@ -18,55 +16,6 @@ import (
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 )
-
-// checkIshServerAvailable checks if the ish mock server is running
-func checkIshServerAvailable() bool {
-	conn, err := net.DialTimeout("tcp", "localhost:9000", 1*time.Second)
-	if err != nil {
-		return false
-	}
-	conn.Close()
-	return true
-}
-
-// setupIshMode configures environment for ish mode testing
-func setupIshMode(t *testing.T) func() {
-	t.Helper()
-
-	// Check if ish server is available
-	if !checkIshServerAvailable() {
-		t.Skip("Skipping scenario test: ish mock server not available at localhost:9000")
-	}
-
-	// Save original values
-	originalIshMode := os.Getenv("ISH_MODE")
-	originalIshBaseURL := os.Getenv("ISH_BASE_URL")
-	originalIshUser := os.Getenv("ISH_USER")
-
-	// Set ish mode
-	os.Setenv("ISH_MODE", "true")
-	os.Setenv("ISH_BASE_URL", "http://localhost:9000")
-	os.Setenv("ISH_USER", "testuser@example.com")
-
-	// Return cleanup function
-	return func() {
-		if originalIshMode == "" {
-			os.Unsetenv("ISH_MODE")
-		} else {
-			os.Setenv("ISH_MODE", originalIshMode)
-		}
-		if originalIshBaseURL == "" {
-			os.Unsetenv("ISH_BASE_URL")
-		} else {
-			os.Setenv("ISH_BASE_URL", originalIshBaseURL)
-		}
-		if originalIshUser == "" {
-			os.Unsetenv("ISH_USER")
-		} else {
-			os.Setenv("ISH_USER", originalIshUser)
-		}
-	}
-}
 
 // TestScenario_EmailTriage tests a realistic email triage workflow
 func TestScenario_EmailTriage(t *testing.T) {

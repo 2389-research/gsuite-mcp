@@ -5,7 +5,7 @@ before:
     - go mod tidy
 
 builds:
-  - main: ./cmd/server
+  - main: ./cmd/gsuite-mcp
     binary: gsuite-mcp
     goos:
       - darwin

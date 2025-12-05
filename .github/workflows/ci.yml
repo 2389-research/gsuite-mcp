@@ -86,7 +86,7 @@ jobs:
           cache: true
 
       - name: Build server binary
-        run: go build -o gsuite-mcp ./cmd/server
+        run: go build -o gsuite-mcp ./cmd/gsuite-mcp
 
       - name: Verify binary exists
         run: test -f gsuite-mcp
