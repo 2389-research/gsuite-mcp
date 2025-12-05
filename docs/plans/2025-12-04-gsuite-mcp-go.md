@@ -23,7 +23,7 @@
 
 Run:
 ```bash
-go mod init github.com/yourusername/gsuite-mcp
+go mod init github.com/harper/gsuite-mcp
 ```
 Expected: Creates go.mod with module declaration
 
@@ -1079,10 +1079,10 @@ import (
 	"net/http"
 	"os"
 
-	"github.com/yourusername/gsuite-mcp/pkg/auth"
-	"github.com/yourusername/gsuite-mcp/pkg/calendar"
-	"github.com/yourusername/gsuite-mcp/pkg/gmail"
-	"github.com/yourusername/gsuite-mcp/pkg/people"
+	"github.com/harper/gsuite-mcp/pkg/auth"
+	"github.com/harper/gsuite-mcp/pkg/calendar"
+	"github.com/harper/gsuite-mcp/pkg/gmail"
+	"github.com/harper/gsuite-mcp/pkg/people"
 
 	"github.com/mark3labs/mcp-go/mcp"
 	"github.com/mark3labs/mcp-go/server"
@@ -1344,7 +1344,7 @@ import (
 	"log"
 	"os"
 
-	"github.com/yourusername/gsuite-mcp/pkg/server"
+	"github.com/harper/gsuite-mcp/pkg/server"
 )
 
 func main() {
