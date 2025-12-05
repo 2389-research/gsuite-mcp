@@ -123,6 +123,61 @@ func (s *Server) registerTools() {
 		},
 	}, s.handleCalendarListEvents)
 
+	s.mcp.AddTool(mcp.Tool{
+		Name:        "calendar_get_event",
+		Description: "Get a specific calendar event by ID",
+		InputSchema: mcp.ToolInputSchema{
+			Type: "object",
+			Properties: map[string]interface{}{
+				"event_id": map[string]string{"type": "string", "description": "The event ID to retrieve"},
+			},
+			Required: []string{"event_id"},
+		},
+	}, s.handleCalendarGetEvent)
+
+	s.mcp.AddTool(mcp.Tool{
+		Name:        "calendar_create_event",
+		Description: "Create a new calendar event",
+		InputSchema: mcp.ToolInputSchema{
+			Type: "object",
+			Properties: map[string]interface{}{
+				"summary":     map[string]string{"type": "string", "description": "Event title/summary"},
+				"description": map[string]string{"type": "string", "description": "Event description"},
+				"start_time":  map[string]string{"type": "string", "description": "Start time in RFC3339 format"},
+				"end_time":    map[string]string{"type": "string", "description": "End time in RFC3339 format"},
+			},
+			Required: []string{"summary", "start_time", "end_time"},
+		},
+	}, s.handleCalendarCreateEvent)
+
+	s.mcp.AddTool(mcp.Tool{
+		Name:        "calendar_update_event",
+		Description: "Update an existing calendar event",
+		InputSchema: mcp.ToolInputSchema{
+			Type: "object",
+			Properties: map[string]interface{}{
+				"event_id":    map[string]string{"type": "string", "description": "The event ID to update"},
+				"summary":     map[string]string{"type": "string", "description": "New event title/summary"},
+				"description": map[string]string{"type": "string", "description": "New event description"},
+				"start_time":  map[string]string{"type": "string", "description": "New start time in RFC3339 format"},
+				"end_time":    map[string]string{"type": "string", "description": "New end time in RFC3339 format"},
+			},
+			Required: []string{"event_id"},
+		},
+	}, s.handleCalendarUpdateEvent)
+
+	s.mcp.AddTool(mcp.Tool{
+		Name:        "calendar_delete_event",
+		Description: "Delete a calendar event",
+		InputSchema: mcp.ToolInputSchema{
+			Type: "object",
+			Properties: map[string]interface{}{
+				"event_id": map[string]string{"type": "string", "description": "The event ID to delete"},
+			},
+			Required: []string{"event_id"},
+		},
+	}, s.handleCalendarDeleteEvent)
+
 	// People tools
 	s.mcp.AddTool(mcp.Tool{
 		Name:        "people_list_contacts",
@@ -224,6 +279,115 @@ func (s *Server) handleCalendarListEvents(ctx context.Context, request mcp.CallT
 	}
 
 	return mcp.NewToolResultJSON(events)
+}
+
+func (s *Server) handleCalendarGetEvent(ctx context.Context, request mcp.CallToolRequest) (*mcp.CallToolResult, error) {
+	eventID, err := request.RequireString("event_id")
+	if err != nil {
+		return mcp.NewToolResultError(err.Error()), nil
+	}
+
+	event, err := s.calendar.GetEvent(ctx, eventID)
+	if err != nil {
+		return mcp.NewToolResultError(err.Error()), nil
+	}
+
+	return mcp.NewToolResultJSON(event)
+}
+
+func (s *Server) handleCalendarCreateEvent(ctx context.Context, request mcp.CallToolRequest) (*mcp.CallToolResult, error) {
+	summary, err := request.RequireString("summary")
+	if err != nil {
+		return mcp.NewToolResultError(err.Error()), nil
+	}
+
+	description := request.GetString("description", "")
+
+	startTimeStr, err := request.RequireString("start_time")
+	if err != nil {
+		return mcp.NewToolResultError(err.Error()), nil
+	}
+
+	endTimeStr, err := request.RequireString("end_time")
+	if err != nil {
+		return mcp.NewToolResultError(err.Error()), nil
+	}
+
+	startTime, err := time.Parse(time.RFC3339, startTimeStr)
+	if err != nil {
+		return mcp.NewToolResultError(fmt.Sprintf("invalid start_time format: %v", err)), nil
+	}
+
+	endTime, err := time.Parse(time.RFC3339, endTimeStr)
+	if err != nil {
+		return mcp.NewToolResultError(fmt.Sprintf("invalid end_time format: %v", err)), nil
+	}
+
+	event, err := s.calendar.CreateEvent(ctx, summary, description, startTime, endTime)
+	if err != nil {
+		return mcp.NewToolResultError(err.Error()), nil
+	}
+
+	return mcp.NewToolResultJSON(event)
+}
+
+func (s *Server) handleCalendarUpdateEvent(ctx context.Context, request mcp.CallToolRequest) (*mcp.CallToolResult, error) {
+	eventID, err := request.RequireString("event_id")
+	if err != nil {
+		return mcp.NewToolResultError(err.Error()), nil
+	}
+
+	// Get existing event first
+	event, err := s.calendar.GetEvent(ctx, eventID)
+	if err != nil {
+		return mcp.NewToolResultError(err.Error()), nil
+	}
+
+	// Update fields if provided
+	if summary := request.GetString("summary", ""); summary != "" {
+		event.Summary = summary
+	}
+
+	if description := request.GetString("description", ""); description != "" {
+		event.Description = description
+	}
+
+	if startTimeStr := request.GetString("start_time", ""); startTimeStr != "" {
+		startTime, err := time.Parse(time.RFC3339, startTimeStr)
+		if err != nil {
+			return mcp.NewToolResultError(fmt.Sprintf("invalid start_time format: %v", err)), nil
+		}
+		event.Start.DateTime = startTime.Format(time.RFC3339)
+	}
+
+	if endTimeStr := request.GetString("end_time", ""); endTimeStr != "" {
+		endTime, err := time.Parse(time.RFC3339, endTimeStr)
+		if err != nil {
+			return mcp.NewToolResultError(fmt.Sprintf("invalid end_time format: %v", err)), nil
+		}
+		event.End.DateTime = endTime.Format(time.RFC3339)
+	}
+
+	updated, err := s.calendar.UpdateEvent(ctx, eventID, event)
+	if err != nil {
+		return mcp.NewToolResultError(err.Error()), nil
+	}
+
+	return mcp.NewToolResultJSON(updated)
+}
+
+func (s *Server) handleCalendarDeleteEvent(ctx context.Context, request mcp.CallToolRequest) (*mcp.CallToolResult, error) {
+	eventID, err := request.RequireString("event_id")
+	if err != nil {
+		return mcp.NewToolResultError(err.Error()), nil
+	}
+
+	err = s.calendar.DeleteEvent(ctx, eventID)
+	if err != nil {
+		return mcp.NewToolResultError(err.Error()), nil
+	}
+
+	return mcp.NewToolResultText(fmt.Sprintf("Event %s deleted successfully", eventID)), nil
 }
 
 func (s *Server) handlePeopleListContacts(ctx context.Context, request mcp.CallToolRequest) (*mcp.CallToolResult, error) {

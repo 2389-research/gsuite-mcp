@@ -29,3 +29,4 @@ token.json
 
 # Environment
 .env
+.scratch/
