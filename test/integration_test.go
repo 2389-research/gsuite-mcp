@@ -23,7 +23,7 @@ func checkIshServerAvailable() bool {
 	if err != nil {
 		return false
 	}
-	conn.Close()
+	_ = conn.Close()
 	return true
 }
 
@@ -42,26 +42,26 @@ func setupIshMode(t *testing.T) func() {
 	originalIshUser := os.Getenv("ISH_USER")
 
 	// Set ish mode
-	os.Setenv("ISH_MODE", "true")
-	os.Setenv("ISH_BASE_URL", "http://localhost:9000")
-	os.Setenv("ISH_USER", "testuser@example.com")
+	_ = os.Setenv("ISH_MODE", "true")
+	_ = os.Setenv("ISH_BASE_URL", "http://localhost:9000")
+	_ = os.Setenv("ISH_USER", "testuser@example.com")
 
 	// Return cleanup function
 	return func() {
 		if originalIshMode == "" {
-			os.Unsetenv("ISH_MODE")
+			_ = os.Unsetenv("ISH_MODE")
 		} else {
-			os.Setenv("ISH_MODE", originalIshMode)
+			_ = os.Setenv("ISH_MODE", originalIshMode)
 		}
 		if originalIshBaseURL == "" {
-			os.Unsetenv("ISH_BASE_URL")
+			_ = os.Unsetenv("ISH_BASE_URL")
 		} else {
-			os.Setenv("ISH_BASE_URL", originalIshBaseURL)
+			_ = os.Setenv("ISH_BASE_URL", originalIshBaseURL)
 		}
 		if originalIshUser == "" {
-			os.Unsetenv("ISH_USER")
+			_ = os.Unsetenv("ISH_USER")
 		} else {
-			os.Setenv("ISH_USER", originalIshUser)
+			_ = os.Setenv("ISH_USER", originalIshUser)
 		}
 	}
 }
@@ -445,7 +445,7 @@ func TestIshModeConfiguration(t *testing.T) {
 
 	t.Run("CleanupRestoresOriginalValues", func(t *testing.T) {
 		// Set some original values
-		os.Setenv("ISH_MODE", "original")
+		_ = os.Setenv("ISH_MODE", "original")
 		originalValue := os.Getenv("ISH_MODE")
 
 		cleanup := setupIshMode(t)

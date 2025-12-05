@@ -7,7 +7,6 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
-	"strings"
 	"time"
 
 	"github.com/mark3labs/mcp-go/mcp"
@@ -421,13 +420,4 @@ func getAvailabilityStatus(busyHours float64) string {
 		return "busy"
 	}
 	return "very_busy"
-}
-
-// extractDomain extracts domain from email address
-func extractDomain(email string) string {
-	parts := strings.Split(email, "@")
-	if len(parts) == 2 {
-		return parts[1]
-	}
-	return ""
 }
