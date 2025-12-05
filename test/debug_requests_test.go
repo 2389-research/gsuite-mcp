@@ -35,20 +35,20 @@ func TestDebugRequests(t *testing.T) {
 		w.Header().Set("Content-Type", "application/json")
 
 		if r.URL.Path == "/gmail/v1/users/me/messages" {
-			w.Write([]byte(`{"messages":[],"resultSizeEstimate":0}`))
+			_, _ = w.Write([]byte(`{"messages":[],"resultSizeEstimate":0}`))
 		} else if r.URL.Path == "/gmail/v1/users/me/messages/send" {
-			w.Write([]byte(`{"id":"msg123","threadId":"thread123"}`))
+			_, _ = w.Write([]byte(`{"id":"msg123","threadId":"thread123"}`))
 		} else if r.URL.Path == "/calendar/v3/calendars/primary/events" && r.Method == "GET" {
-			w.Write([]byte(`{"items":[]}`))
+			_, _ = w.Write([]byte(`{"items":[]}`))
 		} else if r.URL.Path == "/calendar/v3/calendars/primary/events" && r.Method == "POST" {
-			w.Write([]byte(`{"id":"event123","summary":"Test"}`))
+			_, _ = w.Write([]byte(`{"id":"event123","summary":"Test"}`))
 		} else if r.URL.Path == "/v1/people/me/connections" {
-			w.Write([]byte(`{"connections":[]}`))
+			_, _ = w.Write([]byte(`{"connections":[]}`))
 		} else if r.URL.Path == "/v1/people:searchContacts" {
-			w.Write([]byte(`{"results":[]}`))
+			_, _ = w.Write([]byte(`{"results":[]}`))
 		} else {
 			w.WriteHeader(404)
-			w.Write([]byte(`{"error":"not found"}`))
+			_, _ = w.Write([]byte(`{"error":"not found"}`))
 		}
 	}))
 	defer server.Close()

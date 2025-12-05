@@ -163,7 +163,7 @@ func TestServer_HandlePeopleGetContact(t *testing.T) {
 		"resource_name": "people/12345",
 	})
 
-	result, err := srv.handlePeopleGetContact(context.Background(), request)
+	result, _ := srv.handlePeopleGetContact(context.Background(), request)
 
 	// This may return an error if the resource doesn't exist in ish mode
 	// but the handler should still work correctly

@@ -114,6 +114,7 @@ func TestGmailOperationsIntegration(t *testing.T) {
 			}
 			if msg == nil {
 				t.Error("Expected message to be non-nil")
+				return
 			}
 			t.Logf("Retrieved message with ID: %s", msg.Id)
 		}
@@ -237,6 +238,7 @@ func TestPeopleOperationsIntegration(t *testing.T) {
 			}
 			if person == nil {
 				t.Error("Expected person to be non-nil")
+				return
 			}
 			t.Logf("Retrieved person: %s", person.ResourceName)
 		}
