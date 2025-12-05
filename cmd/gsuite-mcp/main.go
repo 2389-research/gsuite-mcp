@@ -4,11 +4,23 @@
 package main
 
 import (
+	"context"
 	"log"
-	"os"
+
+	"github.com/harper/gsuite-mcp/pkg/server"
 )
 
 func main() {
+	ctx := context.Background()
+
+	srv, err := server.NewServer(ctx)
+	if err != nil {
+		log.Fatalf("Failed to create server: %v", err)
+	}
+
 	log.Println("GSuite MCP Server starting...")
-	os.Exit(0)
+
+	if err := srv.Serve(ctx); err != nil {
+		log.Fatalf("Server error: %v", err)
+	}
 }
