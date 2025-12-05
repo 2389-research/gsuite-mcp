@@ -79,7 +79,7 @@ func (a *Authenticator) GetClient(ctx context.Context) (*http.Client, error) {
 }
 
 // loadToken loads a cached token from disk
-func (a *Authenticator) loadToken() (*oauth2.Token, error) {
+func (a *Authenticator) loadToken() (token *oauth2.Token, err error) {
 	f, err := os.Open(a.tokenPath)
 	if err != nil {
 		return nil, err
@@ -90,13 +90,13 @@ func (a *Authenticator) loadToken() (*oauth2.Token, error) {
 		}
 	}()
 
-	token := &oauth2.Token{}
+	token = &oauth2.Token{}
 	err = json.NewDecoder(f).Decode(token)
 	return token, err
 }
 
 // saveToken saves a token to disk
-func (a *Authenticator) saveToken(token *oauth2.Token) error {
+func (a *Authenticator) saveToken(token *oauth2.Token) (err error) {
 	f, err := os.Create(a.tokenPath)
 	if err != nil {
 		return err
