@@ -76,6 +76,29 @@ func (s *Server) registerPrompts() {
 		),
 		s.handleFollowUpReminderPrompt,
 	)
+
+	// Email reply prompt
+	s.mcp.AddPrompt(
+		mcp.NewPrompt(
+			"email_reply",
+			mcp.WithPromptDescription("Reply to an existing email with proper threading"),
+			mcp.WithArgument("subject", mcp.ArgumentDescription("Subject of the email to reply to")),
+			mcp.WithArgument("sender", mcp.ArgumentDescription("Sender of the original email")),
+			mcp.WithArgument("context", mcp.ArgumentDescription("Optional: additional context about what to include in reply")),
+		),
+		s.handleEmailReplyPrompt,
+	)
+
+	// Add contact from email prompt
+	s.mcp.AddPrompt(
+		mcp.NewPrompt(
+			"add_contact_from_email",
+			mcp.WithPromptDescription("Extract and add contact information from an email with CRM workflow"),
+			mcp.WithArgument("email_subject", mcp.ArgumentDescription("Subject of the email containing contact info"), mcp.RequiredArgument()),
+			mcp.WithArgument("sender", mcp.ArgumentDescription("Sender email address or name")),
+		),
+		s.handleAddContactFromEmailPrompt,
+	)
 }
 
 // Prompt handlers
@@ -100,11 +123,13 @@ func (s *Server) handleEmailTriagePrompt(ctx context.Context, request mcp.GetPro
    - Urgent action needed
    - Can wait / reply later
    - Informational only
-   - Spam/unsubscribe candidate
+   - Archive (no action needed)
 3. **Suggest actions** for each category:
    - Quick replies for urgent items
-   - Archiving for informational items
+   - Archive for informational items (NEVER DELETE - only archive)
    - Unsubscribing from unwanted senders
+
+**Important:** NEVER suggest deleting emails. Only archive them. Use gmail_modify_labels to add/remove labels for organization.
 
 Let me start by fetching your unread emails...`, priority, query)
 
@@ -142,7 +167,18 @@ func (s *Server) handleScheduleMeetingPrompt(ctx context.Context, request mcp.Ge
    - Business hours (9 AM - 5 PM)
    - Buffer time between meetings (15 min)
    - Lunch time avoided (12-1 PM)
+   - Timezone considerations for attendees
 4. **Create the calendar event** once you choose a time
+
+**Timezone Handling:**
+- All calendar events use **America/Chicago** as primary timezone
+- If scheduling with international attendees, I'll provide times in BOTH timezones
+- Example: "9am Chicago time (4pm Zurich)" or "2pm Chicago time (7am Tokyo)"
+- Common timezone offsets from Chicago:
+  - Europe (CET/CEST): +7 hours
+  - UK (GMT/BST): +6 hours
+  - Tokyo (JST): +15 hours
+  - Sydney (AEDT): +17 hours
 
 Let me start by checking your calendar availability...`, duration, attendeeList)
 
@@ -168,6 +204,10 @@ func (s *Server) handleComposeEmailPrompt(ctx context.Context, request mcp.GetPr
 
 	promptText := fmt.Sprintf(`I'll help you compose %s with a %s tone.
 
+**First, I need to know:**
+- Is this a **new email** or a **reply** to an existing thread?
+- If it's a reply, I'll search for the original email to get thread context
+
 **Email Structure:**
 1. **Subject line**: Clear, specific, actionable
 2. **Greeting**: Appropriate for the tone and relationship
@@ -182,14 +222,21 @@ func (s *Server) handleComposeEmailPrompt(ctx context.Context, request mcp.GetPr
 - Proofread for clarity
 - Consider recipient's time
 
-Once I draft the email, I can:
-- **Save as draft** using gmail_create_draft
-- **Send immediately** using gmail_send_message
-- **Iterate** based on your feedback
+**Important - Draft First:**
+- I will ALWAYS create a **draft** using gmail_create_draft (never send directly)
+- You can review and send it yourself
+- If replying, I'll ensure proper threading with thread_id and message_id
+
+**For Replies:**
+1. Search for original email using gmail_list_messages
+2. Extract thread_id and message_id for proper threading
+3. Get full context from original message
+4. Draft reply that maintains conversation thread
 
 Tell me more about:
 - Who is the recipient?
 - What's the main message or request?
+- Is this a reply to an existing email? (provide subject/sender if yes)
 - Any specific details to include?`, emailContext, tone)
 
 	messages := []mcp.PromptMessage{
@@ -226,6 +273,12 @@ func (s *Server) handleFindContactPrompt(ctx context.Context, request mcp.GetPro
    - Send an email
    - Schedule a meeting
    - Update contact information
+
+**CRM Integration (if applicable):**
+- If adding a new contact, I'll check for duplicates first
+- Associate contact with their company if known
+- Suggest logging interactions after meaningful exchanges
+- Identify if this is a potential business opportunity (deal) to track
 
 Let me search your contacts now...`, searchTerm, searchTerm)
 
@@ -362,4 +415,178 @@ Let me create this follow-up reminder for you...`, followUpContext, timeDescript
 	}
 
 	return mcp.NewGetPromptResult("Follow-up reminder creation assistant", messages), nil
+}
+
+func (s *Server) handleEmailReplyPrompt(ctx context.Context, request mcp.GetPromptRequest) (*mcp.GetPromptResult, error) {
+	subject := ""
+	sender := ""
+	context := ""
+
+	if request.Params.Arguments != nil {
+		if subj, ok := request.Params.Arguments["subject"]; ok {
+			subject = subj
+		}
+		if snd, ok := request.Params.Arguments["sender"]; ok {
+			sender = snd
+		}
+		if ctx, ok := request.Params.Arguments["context"]; ok {
+			context = ctx
+		}
+	}
+
+	searchInfo := ""
+	if subject != "" && sender != "" {
+		searchInfo = fmt.Sprintf("subject:\"%s\" from:%s", subject, sender)
+	} else if subject != "" {
+		searchInfo = fmt.Sprintf("subject:\"%s\"", subject)
+	} else if sender != "" {
+		searchInfo = fmt.Sprintf("from:%s", sender)
+	}
+
+	additionalContext := ""
+	if context != "" {
+		additionalContext = fmt.Sprintf("\n\n**Additional Context:**\n%s", context)
+	}
+
+	promptText := fmt.Sprintf(`I'll help you reply to an email with proper threading. Here's my workflow:
+
+**Step 1: Find the Original Email**
+Search query: %s
+
+Using gmail_list_messages to find:
+- The email thread
+- Thread ID (for conversation threading)
+- Message ID (the specific message to reply to)
+- Full email content for context
+
+**Step 2: Extract Threading Information**
+**CRITICAL**: Both thread_id and message_id are required for proper threading.
+- Thread ID links all messages in the conversation
+- Message ID identifies the specific message you're replying to
+- Missing either will create a broken/standalone draft
+
+**Step 3: Get Full Context**
+Using gmail_get_message to retrieve:
+- Complete email body
+- All recipients (To/CC)
+- Original subject line
+- Any attachments or references
+
+**Step 4: Draft the Reply**
+Create a draft using gmail_create_draft with:
+- **To**: Recipient email (CRITICAL - must explicitly provide, not auto-extracted!)
+- **Thread ID**: To keep it in conversation
+- **In-Reply-To**: Message ID of email we're replying to
+- **Subject**: Maintain thread subject (usually "Re: [original]")
+- **Body**: Your reply content
+- NO signature (unless explicitly requested)
+
+**Step 5: Verify Threading**
+After creating draft:
+- Confirm it appears in the correct conversation thread
+- Verify subject line maintains thread format
+- Ensure draft is saved (not sent)%s
+
+**Important Reminders:**
+- ALWAYS draft first, NEVER send directly
+- Replies must maintain conversation threading
+- Extract recipient email explicitly - the tool doesn't auto-fill it
+- Keep replies concise and action-focused
+
+Let me start by searching for the original email...`, searchInfo, additionalContext)
+
+	messages := []mcp.PromptMessage{
+		mcp.NewPromptMessage(mcp.RoleUser, mcp.NewTextContent(promptText)),
+	}
+
+	return mcp.NewGetPromptResult("Email reply assistant with proper threading workflow", messages), nil
+}
+
+func (s *Server) handleAddContactFromEmailPrompt(ctx context.Context, request mcp.GetPromptRequest) (*mcp.GetPromptResult, error) {
+	emailSubject := ""
+	sender := ""
+
+	if request.Params.Arguments != nil {
+		if subj, ok := request.Params.Arguments["email_subject"]; ok {
+			emailSubject = subj
+		}
+		if snd, ok := request.Params.Arguments["sender"]; ok {
+			sender = snd
+		}
+	}
+
+	if emailSubject == "" {
+		return nil, fmt.Errorf("email_subject argument is required")
+	}
+
+	searchQuery := fmt.Sprintf("subject:\"%s\"", emailSubject)
+	if sender != "" {
+		searchQuery = fmt.Sprintf("%s from:%s", searchQuery, sender)
+	}
+
+	promptText := fmt.Sprintf(`I'll extract and add contact information from the email with proper CRM workflow.
+
+**Step 1: Find and Read the Email**
+Search query: %s
+
+Using gmail_list_messages and gmail_get_message to retrieve:
+- Full email content
+- Sender information
+- Email signature
+- Any contact details in the body
+
+**Step 2: Extract Contact Information**
+Look for:
+- Full name
+- Email address(es)
+- Phone number(s)
+- Company/organization
+- Job title
+- Location
+- Any context about how you know them
+
+**Step 3: Check for Duplicates (CRITICAL)**
+Before adding ANYTHING:
+- Search existing contacts using people_search_contacts with email
+- Search for company using people_search_contacts with company name
+- **NEVER add without checking first** - prevents duplicates
+
+**Step 4: Add Company (if applicable)**
+If the person works for a company:
+- Check if company already exists
+- If not, create company first with:
+  - Company name
+  - Domain (from email address)
+  - Industry (if mentioned)
+  - Context notes
+
+**Step 5: Add/Update Contact**
+Using people_create_contact:
+- Full name
+- Email address
+- Company association (ALWAYS link if known)
+- Phone number
+- Notes: Include how you met, context from email, any relevant details
+
+**Step 6: Log the Interaction**
+If there's a meaningful exchange:
+- Note what was discussed
+- Any action items or follow-ups
+- Date of interaction
+
+**Step 7: Identify Potential Deal**
+If this is a business opportunity:
+- Consulting work
+- Speaking engagement
+- Partnership
+- Investment opportunity
+→ Create a deal to track it
+
+Let me start by finding and reading the email...`, searchQuery)
+
+	messages := []mcp.PromptMessage{
+		mcp.NewPromptMessage(mcp.RoleUser, mcp.NewTextContent(promptText)),
+	}
+
+	return mcp.NewGetPromptResult("Contact extraction and CRM workflow assistant", messages), nil
 }

@@ -49,14 +49,21 @@ See [docs/usage.md](docs/usage.md) for detailed tool documentation and examples.
 
 ## MCP Prompts
 
-The server provides 6 workflow prompts for common tasks:
+The server provides 8 workflow prompts for common tasks:
 
-1. **email_triage** - Help triage and organize unread emails
-2. **schedule_meeting** - Find available time slots and schedule meetings
-3. **compose_email** - Help compose professional emails
-4. **find_contact** - Search for contact information
+### Email Workflows
+1. **email_triage** - Help triage and organize unread emails (never deletes, only archives)
+2. **compose_email** - Help compose professional emails with threading awareness and draft-first approach
+3. **email_reply** - Reply to existing emails with proper threading (searches original, extracts thread_id/message_id)
+
+### Calendar Workflows
+4. **schedule_meeting** - Find available time slots and schedule meetings with timezone handling
 5. **calendar_summary** - Summarize calendar events for a time period
-6. **follow_up_reminder** - Set up follow-up reminders
+6. **follow_up_reminder** - Set up follow-up reminders for important emails or meetings
+
+### Contact/CRM Workflows
+7. **find_contact** - Search for contact information with CRM integration guidance
+8. **add_contact_from_email** - Extract and add contact information from emails with full CRM workflow (duplicate checking, company association, interaction logging)
 
 ## MCP Resources
 
