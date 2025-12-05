@@ -9,7 +9,9 @@ import (
 	"fmt"
 	"net/http"
 	"os"
+	"time"
 
+	"github.com/harper/gsuite-mcp/pkg/retry"
 	"google.golang.org/api/gmail/v1"
 	"google.golang.org/api/option"
 )
@@ -47,13 +49,20 @@ func NewService(ctx context.Context, client *http.Client) (*Service, error) {
 
 // ListMessages lists messages matching query
 func (s *Service) ListMessages(ctx context.Context, query string, maxResults int64) ([]*gmail.Message, error) {
-	call := s.svc.Users.Messages.List("me").MaxResults(maxResults)
+	var result *gmail.ListMessagesResponse
 
-	if query != "" {
-		call = call.Q(query)
-	}
+	err := retry.WithRetry(func() error {
+		call := s.svc.Users.Messages.List("me").Context(ctx).MaxResults(maxResults)
 
-	result, err := call.Do()
+		if query != "" {
+			call = call.Q(query)
+		}
+
+		var err error
+		result, err = call.Do()
+		return err
+	}, 3, time.Second)
+
 	if err != nil {
 		return nil, fmt.Errorf("unable to list messages: %w", err)
 	}
@@ -63,7 +72,14 @@ func (s *Service) ListMessages(ctx context.Context, query string, maxResults int
 
 // GetMessage retrieves a specific message
 func (s *Service) GetMessage(ctx context.Context, messageID string) (*gmail.Message, error) {
-	msg, err := s.svc.Users.Messages.Get("me", messageID).Do()
+	var msg *gmail.Message
+
+	err := retry.WithRetry(func() error {
+		var err error
+		msg, err = s.svc.Users.Messages.Get("me", messageID).Context(ctx).Do()
+		return err
+	}, 3, time.Second)
+
 	if err != nil {
 		return nil, fmt.Errorf("unable to get message: %w", err)
 	}
@@ -79,7 +95,13 @@ func (s *Service) SendMessage(ctx context.Context, to, subject, body string) (*g
 		Raw: encoded,
 	}
 
-	sent, err := s.svc.Users.Messages.Send("me", msg).Do()
+	var sent *gmail.Message
+	err := retry.WithRetry(func() error {
+		var err error
+		sent, err = s.svc.Users.Messages.Send("me", msg).Context(ctx).Do()
+		return err
+	}, 3, time.Second)
+
 	if err != nil {
 		return nil, fmt.Errorf("unable to send message: %w", err)
 	}

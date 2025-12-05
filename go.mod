@@ -1,8 +1,11 @@
 module github.com/harper/gsuite-mcp
 
-go 1.24.9
+go 1.24.0
+
+toolchain go1.24.9
 
 require (
+	github.com/mark3labs/mcp-go v0.43.2
 	github.com/stretchr/testify v1.11.1
 	golang.org/x/oauth2 v0.33.0
 	google.golang.org/api v0.257.0
@@ -24,7 +27,6 @@ require (
 	github.com/googleapis/gax-go/v2 v2.15.0 // indirect
 	github.com/invopop/jsonschema v0.13.0 // indirect
 	github.com/mailru/easyjson v0.7.7 // indirect
-	github.com/mark3labs/mcp-go v0.43.2 // indirect
 	github.com/pmezard/go-difflib v1.0.0 // indirect
 	github.com/spf13/cast v1.7.1 // indirect
 	github.com/wk8/go-ordered-map/v2 v2.1.8 // indirect

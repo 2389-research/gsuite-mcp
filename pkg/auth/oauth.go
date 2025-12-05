@@ -84,7 +84,11 @@ func (a *Authenticator) loadToken() (*oauth2.Token, error) {
 	if err != nil {
 		return nil, err
 	}
-	defer f.Close()
+	defer func() {
+		if cerr := f.Close(); cerr != nil && err == nil {
+			err = cerr
+		}
+	}()
 
 	token := &oauth2.Token{}
 	err = json.NewDecoder(f).Decode(token)
@@ -97,9 +101,14 @@ func (a *Authenticator) saveToken(token *oauth2.Token) error {
 	if err != nil {
 		return err
 	}
-	defer f.Close()
+	defer func() {
+		if cerr := f.Close(); cerr != nil && err == nil {
+			err = cerr
+		}
+	}()
 
-	return json.NewEncoder(f).Encode(token)
+	err = json.NewEncoder(f).Encode(token)
+	return err
 }
 
 // authenticate performs the OAuth flow to get a new token

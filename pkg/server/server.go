@@ -30,7 +30,6 @@ type Server struct {
 // NewServer creates a new MCP server
 func NewServer(ctx context.Context) (*Server, error) {
 	var client *http.Client
-	var err error
 
 	// Check for ish mode
 	if os.Getenv("ISH_MODE") == "true" {
@@ -180,16 +179,18 @@ func (s *Server) handleCalendarListEvents(ctx context.Context, request mcp.CallT
 	var timeMin, timeMax time.Time
 	if tm := request.GetString("time_min", ""); tm != "" {
 		parsed, err := time.Parse(time.RFC3339, tm)
-		if err == nil {
-			timeMin = parsed
+		if err != nil {
+			return mcp.NewToolResultError(fmt.Sprintf("invalid time_min format: %v", err)), nil
 		}
+		timeMin = parsed
 	}
 
 	if tm := request.GetString("time_max", ""); tm != "" {
 		parsed, err := time.Parse(time.RFC3339, tm)
-		if err == nil {
-			timeMax = parsed
+		if err != nil {
+			return mcp.NewToolResultError(fmt.Sprintf("invalid time_max format: %v", err)), nil
 		}
+		timeMax = parsed
 	}
 
 	events, err := s.calendar.ListEvents(ctx, maxResults, timeMin, timeMax)

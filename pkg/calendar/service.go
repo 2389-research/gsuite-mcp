@@ -10,6 +10,7 @@ import (
 	"os"
 	"time"
 
+	"github.com/harper/gsuite-mcp/pkg/retry"
 	"google.golang.org/api/calendar/v3"
 	"google.golang.org/api/option"
 )
@@ -47,20 +48,28 @@ func NewService(ctx context.Context, client *http.Client) (*Service, error) {
 
 // ListEvents lists events from the primary calendar
 func (s *Service) ListEvents(ctx context.Context, maxResults int64, timeMin, timeMax time.Time) ([]*calendar.Event, error) {
-	call := s.svc.Events.List("primary").
-		MaxResults(maxResults).
-		SingleEvents(true).
-		OrderBy("startTime")
+	var events *calendar.Events
 
-	if !timeMin.IsZero() {
-		call = call.TimeMin(timeMin.Format(time.RFC3339))
-	}
+	err := retry.WithRetry(func() error {
+		call := s.svc.Events.List("primary").
+			Context(ctx).
+			MaxResults(maxResults).
+			SingleEvents(true).
+			OrderBy("startTime")
 
-	if !timeMax.IsZero() {
-		call = call.TimeMax(timeMax.Format(time.RFC3339))
-	}
+		if !timeMin.IsZero() {
+			call = call.TimeMin(timeMin.Format(time.RFC3339))
+		}
 
-	events, err := call.Do()
+		if !timeMax.IsZero() {
+			call = call.TimeMax(timeMax.Format(time.RFC3339))
+		}
+
+		var err error
+		events, err = call.Do()
+		return err
+	}, 3, time.Second)
+
 	if err != nil {
 		return nil, fmt.Errorf("unable to list events: %w", err)
 	}
@@ -81,7 +90,13 @@ func (s *Service) CreateEvent(ctx context.Context, summary, description string, 
 		},
 	}
 
-	created, err := s.svc.Events.Insert("primary", event).Do()
+	var created *calendar.Event
+	err := retry.WithRetry(func() error {
+		var err error
+		created, err = s.svc.Events.Insert("primary", event).Context(ctx).Do()
+		return err
+	}, 3, time.Second)
+
 	if err != nil {
 		return nil, fmt.Errorf("unable to create event: %w", err)
 	}
@@ -91,7 +106,14 @@ func (s *Service) CreateEvent(ctx context.Context, summary, description string, 
 
 // GetEvent retrieves a specific event
 func (s *Service) GetEvent(ctx context.Context, eventID string) (*calendar.Event, error) {
-	event, err := s.svc.Events.Get("primary", eventID).Do()
+	var event *calendar.Event
+
+	err := retry.WithRetry(func() error {
+		var err error
+		event, err = s.svc.Events.Get("primary", eventID).Context(ctx).Do()
+		return err
+	}, 3, time.Second)
+
 	if err != nil {
 		return nil, fmt.Errorf("unable to get event: %w", err)
 	}
@@ -100,7 +122,14 @@ func (s *Service) GetEvent(ctx context.Context, eventID string) (*calendar.Event
 
 // UpdateEvent updates an existing event
 func (s *Service) UpdateEvent(ctx context.Context, eventID string, event *calendar.Event) (*calendar.Event, error) {
-	updated, err := s.svc.Events.Update("primary", eventID, event).Do()
+	var updated *calendar.Event
+
+	err := retry.WithRetry(func() error {
+		var err error
+		updated, err = s.svc.Events.Update("primary", eventID, event).Context(ctx).Do()
+		return err
+	}, 3, time.Second)
+
 	if err != nil {
 		return nil, fmt.Errorf("unable to update event: %w", err)
 	}
@@ -109,7 +138,10 @@ func (s *Service) UpdateEvent(ctx context.Context, eventID string, event *calend
 
 // DeleteEvent deletes an event
 func (s *Service) DeleteEvent(ctx context.Context, eventID string) error {
-	err := s.svc.Events.Delete("primary", eventID).Do()
+	err := retry.WithRetry(func() error {
+		return s.svc.Events.Delete("primary", eventID).Context(ctx).Do()
+	}, 3, time.Second)
+
 	if err != nil {
 		return fmt.Errorf("unable to delete event: %w", err)
 	}

@@ -8,7 +8,9 @@ import (
 	"fmt"
 	"net/http"
 	"os"
+	"time"
 
+	"github.com/harper/gsuite-mcp/pkg/retry"
 	"google.golang.org/api/option"
 	"google.golang.org/api/people/v1"
 )
@@ -46,11 +48,19 @@ func NewService(ctx context.Context, client *http.Client) (*Service, error) {
 
 // ListContacts lists contacts from the user's contact list
 func (s *Service) ListContacts(ctx context.Context, pageSize int64) ([]*people.Person, error) {
-	call := s.svc.People.Connections.List("people/me").
-		PersonFields("names,emailAddresses,phoneNumbers").
-		PageSize(pageSize)
+	var result *people.ListConnectionsResponse
 
-	result, err := call.Do()
+	err := retry.WithRetry(func() error {
+		call := s.svc.People.Connections.List("people/me").
+			Context(ctx).
+			PersonFields("names,emailAddresses,phoneNumbers").
+			PageSize(pageSize)
+
+		var err error
+		result, err = call.Do()
+		return err
+	}, 3, time.Second)
+
 	if err != nil {
 		return nil, fmt.Errorf("unable to list contacts: %w", err)
 	}
@@ -60,12 +70,20 @@ func (s *Service) ListContacts(ctx context.Context, pageSize int64) ([]*people.P
 
 // SearchContacts searches for contacts matching the query
 func (s *Service) SearchContacts(ctx context.Context, query string, pageSize int64) ([]*people.Person, error) {
-	call := s.svc.People.SearchContacts().
-		Query(query).
-		ReadMask("names,emailAddresses,phoneNumbers").
-		PageSize(pageSize)
+	var result *people.SearchResponse
 
-	result, err := call.Do()
+	err := retry.WithRetry(func() error {
+		call := s.svc.People.SearchContacts().
+			Context(ctx).
+			Query(query).
+			ReadMask("names,emailAddresses,phoneNumbers").
+			PageSize(pageSize)
+
+		var err error
+		result, err = call.Do()
+		return err
+	}, 3, time.Second)
+
 	if err != nil {
 		return nil, fmt.Errorf("unable to search contacts: %w", err)
 	}
@@ -83,9 +101,17 @@ func (s *Service) SearchContacts(ctx context.Context, query string, pageSize int
 
 // GetPerson retrieves a specific person by resource name
 func (s *Service) GetPerson(ctx context.Context, resourceName string) (*people.Person, error) {
-	person, err := s.svc.People.Get(resourceName).
-		PersonFields("names,emailAddresses,phoneNumbers,addresses,organizations").
-		Do()
+	var person *people.Person
+
+	err := retry.WithRetry(func() error {
+		var err error
+		person, err = s.svc.People.Get(resourceName).
+			Context(ctx).
+			PersonFields("names,emailAddresses,phoneNumbers,addresses,organizations").
+			Do()
+		return err
+	}, 3, time.Second)
+
 	if err != nil {
 		return nil, fmt.Errorf("unable to get person: %w", err)
 	}
