@@ -148,6 +148,25 @@ func (s *Service) CreateDraft(ctx context.Context, to, subject, body string) (*g
 	return created, nil
 }
 
+// ListDrafts lists draft messages
+func (s *Service) ListDrafts(ctx context.Context, maxResults int64) ([]*gmail.Draft, error) {
+	var result *gmail.ListDraftsResponse
+
+	err := retry.WithRetry(func() error {
+		call := s.svc.Users.Drafts.List("me").Context(ctx).MaxResults(maxResults)
+
+		var err error
+		result, err = call.Do()
+		return err
+	}, 3, time.Second)
+
+	if err != nil {
+		return nil, fmt.Errorf("unable to list drafts: %w", err)
+	}
+
+	return result.Drafts, nil
+}
+
 // SendDraft sends an existing draft
 func (s *Service) SendDraft(ctx context.Context, draftID string) (*gmail.Message, error) {
 	draft := &gmail.Draft{

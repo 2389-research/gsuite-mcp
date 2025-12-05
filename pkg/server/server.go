@@ -79,6 +79,8 @@ func NewServer(ctx context.Context) (*Server, error) {
 
 	s.mcp = mcpServer
 	s.registerTools()
+	s.registerPrompts()
+	s.registerResources()
 
 	return s, nil
 }

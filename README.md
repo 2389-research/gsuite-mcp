@@ -6,9 +6,11 @@ A Model Context Protocol (MCP) server that provides programmatic access to Googl
 
 ## Features
 
-- **Gmail Integration**: List and send email messages with Gmail query syntax
-- **Calendar Access**: View upcoming events and schedule management
-- **Contacts Management**: Access and search your Google contacts
+- **Gmail Integration**: Full CRUD operations - list, get, send, create drafts, modify labels, delete messages
+- **Calendar Access**: Complete calendar management - view, create, update, delete events
+- **Contacts Management**: Full contacts API - list, search, get, create, update, delete contacts
+- **MCP Prompts**: Pre-defined workflow templates for common tasks (email triage, meeting scheduling, etc.)
+- **MCP Resources**: Dynamic data endpoints exposing calendar, email, and contact information
 - **OAuth 2.0 Authentication**: Secure access to your Google Workspace data
 - **Ish Mode Testing**: Test without real credentials using mock API server
 - **Automatic Retry Logic**: Exponential backoff for rate limits and transient errors
@@ -16,14 +18,58 @@ A Model Context Protocol (MCP) server that provides programmatic access to Googl
 
 ## Available Tools
 
-The server exposes 4 MCP tools:
+The server exposes 19 MCP tools organized by service:
 
+### Gmail Tools (7)
 1. **gmail_list_messages** - Search and list Gmail messages
-2. **gmail_send_message** - Send email messages
-3. **calendar_list_events** - List calendar events with time filtering
-4. **people_list_contacts** - List contact information
+2. **gmail_get_message** - Get a specific message by ID
+3. **gmail_send_message** - Send email messages
+4. **gmail_create_draft** - Create a draft email
+5. **gmail_send_draft** - Send an existing draft
+6. **gmail_modify_labels** - Add/remove labels from messages
+7. **gmail_delete_message** - Permanently delete a message
+
+### Calendar Tools (6)
+8. **calendar_list_events** - List calendar events with time filtering
+9. **calendar_get_event** - Get a specific event by ID
+10. **calendar_create_event** - Create a new calendar event
+11. **calendar_update_event** - Update an existing event
+12. **calendar_delete_event** - Delete a calendar event
+13. **calendar_quick_add** - Quick add event using natural language
+
+### People/Contacts Tools (6)
+14. **people_list_contacts** - List contact information
+15. **people_get_contact** - Get a specific contact by resource name
+16. **people_search_contacts** - Search contacts by query
+17. **people_create_contact** - Create a new contact
+18. **people_update_contact** - Update an existing contact
+19. **people_delete_contact** - Delete a contact
 
 See [docs/usage.md](docs/usage.md) for detailed tool documentation and examples.
+
+## MCP Prompts
+
+The server provides 6 workflow prompts for common tasks:
+
+1. **email_triage** - Help triage and organize unread emails
+2. **schedule_meeting** - Find available time slots and schedule meetings
+3. **compose_email** - Help compose professional emails
+4. **find_contact** - Search for contact information
+5. **calendar_summary** - Summarize calendar events for a time period
+6. **follow_up_reminder** - Set up follow-up reminders
+
+## MCP Resources
+
+The server exposes 8 dynamic resources:
+
+1. **gsuite://calendar/today** - Today's calendar events
+2. **gsuite://calendar/this-week** - This week's calendar events
+3. **gsuite://calendar/upcoming** - Next 5 upcoming events
+4. **gsuite://calendar/availability** - Free/busy status for next 7 days
+5. **gsuite://gmail/unread** - Unread emails summary
+6. **gsuite://gmail/unread/important** - Important unread emails
+7. **gsuite://gmail/drafts** - Current draft emails
+8. **gsuite://contacts/recent** - Recently added/modified contacts
 
 ## Quick Start
 
@@ -91,7 +137,9 @@ gsuite-mcp/
 │   ├── retry/
 │   │   └── retry.go         # Exponential backoff logic
 │   └── server/
-│       └── server.go        # MCP server implementation
+│       ├── server.go        # MCP server implementation
+│       ├── prompts.go       # MCP prompt templates
+│       └── resources.go     # MCP dynamic resources
 ├── docs/                    # Documentation
 └── go.mod                   # Go module dependencies
 ```
@@ -203,11 +251,13 @@ MIT License - see LICENSE file for details
 
 Future enhancements planned:
 
-- Additional Gmail tools (get message, modify labels, drafts)
-- Calendar event creation and modification
-- Contact creation and updates
-- Batch operations support
-- Service account authentication
-- Advanced query filters
+- Batch operations support for bulk actions
+- Service account authentication for organizational access
+- Advanced query filters and search capabilities
+- Gmail threads and conversation management
+- Calendar recurring events support
+- Contact groups and organization management
+- Drive integration (files and folders)
+- Meet integration (video calls)
 
-See [docs/usage.md](docs/usage.md) for the full list of planned tools.
+See [docs/usage.md](docs/usage.md) for more details on planned features.
