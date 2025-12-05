@@ -1,151 +1,192 @@
 # GSuite MCP Server Setup Guide
 
+This guide covers setting up the GSuite MCP server with both OAuth 2.0 authentication (for production) and ish mode (for testing).
+
 ## Prerequisites
 
-- Python 3.12 or higher
-- Google Cloud Project with Gmail, Calendar, and People APIs enabled
-- OAuth 2.0 credentials from Google Cloud Console (for production mode)
-- OR access to an ish server (for testing mode)
+- Go 1.21 or later
+- Google Cloud account (for OAuth setup)
+- Access to Google Workspace APIs
 
-## Google Cloud Setup (Production Mode)
+## Quick Start
 
-### 1. Create a Google Cloud Project
+### Build the Server
+
+```bash
+go build ./cmd/gsuite-mcp
+```
+
+This creates the `gsuite-mcp` binary in the current directory.
+
+## OAuth 2.0 Setup (Production)
+
+OAuth 2.0 is the primary authentication method for production use. It allows the server to access your Google Workspace data securely.
+
+### Step 1: Create Google Cloud Project
 
 1. Go to [Google Cloud Console](https://console.cloud.google.com/)
 2. Create a new project or select an existing one
 3. Note your project ID
 
-### 2. Enable Required APIs
+### Step 2: Enable Required APIs
 
-Enable these APIs in your project:
+Enable the following APIs for your project:
 
-```bash
-gcloud services enable gmail.googleapis.com
-gcloud services enable calendar-json.googleapis.com
-gcloud services enable people.googleapis.com
-```
+1. **Gmail API**
+   - Navigate to "APIs & Services" > "Library"
+   - Search for "Gmail API"
+   - Click "Enable"
 
-Or enable via Console:
-- Gmail API
-- Google Calendar API
-- People API
+2. **Google Calendar API**
+   - Search for "Google Calendar API"
+   - Click "Enable"
 
-### 3. Create OAuth 2.0 Credentials
+3. **People API**
+   - Search for "People API"
+   - Click "Enable"
 
-1. Go to **APIs & Services > Credentials**
-2. Click **Create Credentials > OAuth client ID**
-3. Choose **Desktop app** as application type
-4. Name it "GSuite MCP Server"
-5. Download the JSON file
-6. Save as `credentials.json` in project root
+### Step 3: Configure OAuth Consent Screen
 
-### 4. Configure OAuth Consent Screen
+1. Go to "APIs & Services" > "OAuth consent screen"
+2. Choose "Internal" (for Google Workspace) or "External" (for personal use)
+3. Fill in required information:
+   - App name: "GSuite MCP Server"
+   - User support email: Your email
+   - Developer contact: Your email
+4. Click "Save and Continue"
+5. Add scopes (click "Add or Remove Scopes"):
+   - `.../auth/gmail.modify`
+   - `.../auth/gmail.labels`
+   - `.../auth/calendar`
+   - `.../auth/contacts`
+6. Click "Save and Continue"
+7. Add test users if using external mode
 
-1. Go to **APIs & Services > OAuth consent screen**
-2. Choose **External** user type
-3. Fill in app name: "GSuite MCP Server"
-4. Add your email as developer contact
-5. Add scopes:
-   - Gmail API: `.../auth/gmail.modify`
-   - Calendar API: `.../auth/calendar`
-   - People API: `.../auth/contacts`
-6. Add test users (your email) if not publishing app
+### Step 4: Create OAuth Credentials
 
-## Installation
+1. Go to "APIs & Services" > "Credentials"
+2. Click "Create Credentials" > "OAuth client ID"
+3. Application type: "Desktop app"
+4. Name: "GSuite MCP Client"
+5. Click "Create"
+6. Download the JSON file
+7. Save as `credentials.json` in the same directory as the binary
 
-### 1. Clone and Install
+### Step 5: First Run and Authorization
 
-```bash
-cd gsuite-mcp
-uv sync
-```
-
-### 2. Place Credentials (Production Mode)
-
-Copy your `credentials.json` to the project root:
-
-```bash
-cp ~/Downloads/credentials.json ./credentials.json
-```
-
-### 3. First Run - OAuth Flow (Production Mode)
-
-On first run, the server will:
-1. Open browser for OAuth consent
-2. Ask you to sign in with Google account
-3. Request permission for scopes
-4. Save token to `token.json`
-
-Test the authentication:
+On first run, the server will prompt for authorization:
 
 ```bash
-uv run python -c "from gsuite_mcp.auth.oauth import OAuth2Authenticator; OAuth2Authenticator().get_credentials()"
+./gsuite-mcp
 ```
 
-## Ish Mode Setup (Testing/Development)
+You'll see:
+```
+Go to the following link in your browser:
+https://accounts.google.com/o/oauth2/auth?...
 
-For testing without real Google credentials, you can use ish mode with a fake Google API server.
-
-### 1. Start the Ish Server
-
-```bash
-# Start ish on default port 9000
-ish serve
+Enter authorization code:
 ```
 
-### 2. Configure Ish Mode
+1. Open the URL in your browser
+2. Sign in with your Google account
+3. Grant permissions
+4. Copy the authorization code from the browser
+5. Paste into the terminal and press Enter
 
-Set environment variables:
+The server will save the token to `token.json` for future use. You won't need to authorize again unless you revoke the token.
+
+### Step 6: Verify Setup
+
+The server is now running and ready to accept MCP requests via stdio.
+
+## Ish Mode Setup (Testing)
+
+Ish mode allows you to test the server without real OAuth credentials. It's perfect for development, CI/CD, and automated testing.
+
+### What is Ish Mode?
+
+Ish mode uses fake Bearer token authentication instead of OAuth. All API requests are redirected to a mock server (typically running locally) that simulates Google Workspace APIs.
+
+### Step 1: Set Environment Variables
+
+Create a `.env` file or set these environment variables:
 
 ```bash
 export ISH_MODE=true
-export ISH_BASE_URL=http://localhost:9000  # Optional, defaults to this
-export ISH_USER=testuser                    # Optional, defaults to testuser
+export ISH_BASE_URL=http://localhost:9000
+export ISH_USER=testuser
 ```
 
-### 3. Run the Server
+Parameters:
+- `ISH_MODE`: Set to `true` to enable ish mode
+- `ISH_BASE_URL`: URL of your mock API server (default: `http://localhost:9000`)
+- `ISH_USER`: Username for Bearer token authentication (default: `testuser`)
+
+### Step 2: Start Mock Server
+
+You'll need a mock server that implements the Google Workspace API endpoints. The server should:
+
+1. Listen on the port specified in `ISH_BASE_URL`
+2. Accept Bearer token authentication with format `Bearer user:USERNAME`
+3. Implement endpoints for Gmail, Calendar, and People APIs
+
+Example using the ish framework:
+```bash
+# Start ish mock server
+ish server start --port 9000
+```
+
+### Step 3: Run the Server
 
 ```bash
-uv run python -m gsuite_mcp
+./gsuite-mcp
 ```
 
-No OAuth flow required! The server will automatically use fake credentials.
+The server will use fake authentication and connect to your mock server instead of real Google APIs.
 
-See [ISH_MODE.md](ISH_MODE.md) for detailed ish mode documentation.
+### Step 4: Run Tests
 
-## Running the Server
-
-### Standalone
+All tests use ish mode by default:
 
 ```bash
-uv run python -m gsuite_mcp
+go test ./...
 ```
 
-### With MCP Client
+Tests automatically set `ISH_MODE=true` and don't require credentials.json.
 
-Add to your MCP client configuration:
+## MCP Client Configuration
 
-**Production Mode:**
+To use the server with an MCP client (like Claude Desktop), add it to your MCP settings:
+
+### Claude Desktop Configuration
+
+Edit your Claude Desktop config file:
+
+**macOS**: `~/Library/Application Support/Claude/claude_desktop_config.json`
+**Windows**: `%APPDATA%\Claude\claude_desktop_config.json`
+
+Add the server:
+
 ```json
 {
   "mcpServers": {
     "gsuite": {
-      "command": "uv",
-      "args": ["run", "python", "-m", "gsuite_mcp"],
-      "cwd": "/path/to/gsuite-mcp"
+      "command": "/path/to/gsuite-mcp",
+      "args": [],
+      "env": {}
     }
   }
 }
 ```
 
-**Ish Mode:**
+For ish mode testing:
 ```json
 {
   "mcpServers": {
-    "gsuite": {
-      "command": "uv",
-      "args": ["run", "python", "-m", "gsuite_mcp"],
-      "cwd": "/path/to/gsuite-mcp",
+    "gsuite-test": {
+      "command": "/path/to/gsuite-mcp",
+      "args": [],
       "env": {
         "ISH_MODE": "true",
         "ISH_BASE_URL": "http://localhost:9000",
@@ -160,38 +201,76 @@ Add to your MCP client configuration:
 
 ### "credentials.json not found"
 
-**Production Mode:** Make sure `credentials.json` is in the project root directory.
-
-**Ish Mode:** Either set `ISH_MODE=true` environment variable or provide `api_base_url` parameter when creating services.
-
-### "Access denied" errors
-
-1. Check OAuth consent screen has correct scopes
-2. Ensure your account is added as test user
-3. Delete `token.json` and re-authenticate
-
-### Rate limit errors
-
-Google APIs have quota limits. The server uses automatic retry with exponential backoff, but if you hit daily quotas, you'll need to wait or request quota increases in Cloud Console.
-
-### Connection Refused (Ish Mode)
-
-Make sure the ish server is running:
+Make sure `credentials.json` is in the same directory as the binary, or set the path:
 
 ```bash
-curl http://localhost:9000/discovery/v1/apis/gmail/v1/rest
+export GOOGLE_CREDENTIALS_PATH=/path/to/credentials.json
 ```
 
-If ish is on a different port, set `ISH_BASE_URL`:
+### "Failed to create Gmail service"
+
+Check that all required APIs are enabled in Google Cloud Console:
+- Gmail API
+- Google Calendar API
+- People API
+
+### OAuth Token Expired
+
+Delete `token.json` and re-run the server. You'll be prompted to re-authorize.
 
 ```bash
-export ISH_BASE_URL=http://localhost:8888
+rm token.json
+./gsuite-mcp
 ```
 
-## Security Notes
+### Ish Mode Not Working
 
-- **Never commit `credentials.json` or `token.json` to git**
-- `.gitignore` includes these files by default
-- Token file contains access tokens - keep it secure
-- For production use, consider service accounts with domain-wide delegation
-- Ish mode credentials are for testing only and provide no real security
+Verify environment variables are set:
+```bash
+echo $ISH_MODE
+echo $ISH_BASE_URL
+echo $ISH_USER
+```
+
+Make sure your mock server is running and accessible at `ISH_BASE_URL`.
+
+## Security Considerations
+
+1. **Never commit credentials.json or token.json** - They are listed in `.gitignore` by default
+2. **Rotate OAuth tokens regularly** - Delete and regenerate if compromised
+3. **Use minimal scopes** - Only enable the APIs you need
+4. **Restrict OAuth consent screen** - Use "Internal" mode for Google Workspace organizations
+5. **Ish mode is for testing only** - Never use in production environments
+
+## Advanced Configuration
+
+### Custom Token Path
+
+```bash
+export GOOGLE_TOKEN_PATH=/custom/path/token.json
+./gsuite-mcp
+```
+
+### Custom Credentials Path
+
+```bash
+export GOOGLE_CREDENTIALS_PATH=/custom/path/credentials.json
+./gsuite-mcp
+```
+
+### Multiple Accounts
+
+Run separate instances with different token files:
+
+```bash
+# Account 1
+GOOGLE_TOKEN_PATH=token-account1.json ./gsuite-mcp
+
+# Account 2
+GOOGLE_TOKEN_PATH=token-account2.json ./gsuite-mcp
+```
+
+## Next Steps
+
+- See [Usage Guide](usage.md) for tool reference and examples
+- See [README](../README.md) for project overview and testing

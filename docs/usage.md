@@ -1,10 +1,10 @@
 # GSuite MCP Server Usage Guide
 
-This guide covers all 17 tools available in the GSuite MCP Server.
+This guide covers all 4 tools available in the GSuite MCP Server (Go implementation).
 
 ## Available Tools
 
-### Gmail Tools (9 tools)
+### Gmail Tools (2 tools)
 
 #### gmail_list_messages
 
@@ -40,29 +40,17 @@ List Gmail messages with optional filters.
 - `in:trash` - In trash
 
 **Returns:**
-List of message objects with `id`, `threadId`, and `snippet`.
-
----
-
-#### gmail_get_message
-
-Get a specific Gmail message by ID with full content.
-
-**Parameters:**
-- `message_id` (string, required): The message ID
-
-**Example:**
 ```json
-{
-  "tool": "gmail_get_message",
-  "arguments": {
-    "message_id": "18c1a2b3d4e5f6g7"
+[
+  {
+    "id": "18c1a2b3d4e5f6g7",
+    "threadId": "18c1a2b3d4e5f6g7",
+    "labelIds": ["INBOX", "UNREAD"]
   }
-}
+]
 ```
 
-**Returns:**
-Complete message object including headers, body, and attachments.
+List of message objects with `id`, `threadId`, and `labelIds` fields.
 
 ---
 
@@ -73,365 +61,98 @@ Send an email.
 **Parameters:**
 - `to` (string, required): Recipient email address
 - `subject` (string, required): Email subject
-- `body` (string, required): Email body
-- `cc` (string, optional): CC recipients
-- `html` (boolean, optional): Whether body is HTML (default: false)
+- `body` (string, required): Email body (plain text)
 
-**Example (Plain Text):**
+**Example:**
 ```json
 {
   "tool": "gmail_send_message",
   "arguments": {
     "to": "recipient@example.com",
-    "subject": "Hello",
-    "body": "This is a plain text message."
-  }
-}
-```
-
-**Example (HTML):**
-```json
-{
-  "tool": "gmail_send_message",
-  "arguments": {
-    "to": "recipient@example.com",
-    "subject": "HTML Email",
-    "body": "<h1>Hello</h1><p>This is <strong>HTML</strong>.</p>",
-    "html": true
-  }
-}
-```
-
-**Example (With CC):**
-```json
-{
-  "tool": "gmail_send_message",
-  "arguments": {
-    "to": "recipient@example.com",
-    "cc": "cc@example.com",
-    "subject": "Team Update",
-    "body": "Message with CC recipient."
+    "subject": "Hello from GSuite MCP",
+    "body": "This is a test message from the GSuite MCP server."
   }
 }
 ```
 
 **Returns:**
-Sent message object with `id` and `threadId`.
+```json
+{
+  "id": "18c1a2b3d4e5f6g8",
+  "threadId": "18c1a2b3d4e5f6g8",
+  "labelIds": ["SENT"]
+}
+```
+
+Sent message object with `id`, `threadId`, and `labelIds`.
 
 ---
 
-#### gmail_reply_to_message
-
-Reply to an existing email thread.
-
-**Parameters:**
-- `message_id` (string, required): ID of message to reply to
-- `body` (string, required): Reply body
-- `html` (boolean, optional): Whether body is HTML (default: false)
-
-**Example:**
-```json
-{
-  "tool": "gmail_reply_to_message",
-  "arguments": {
-    "message_id": "18c1a2b3d4e5f6g7",
-    "body": "Thanks for your message. I'll review this today."
-  }
-}
-```
-
-**Returns:**
-Reply message object with same `threadId` as original.
-
----
-
-#### gmail_list_labels
-
-List all Gmail labels.
-
-**Parameters:**
-None
-
-**Example:**
-```json
-{
-  "tool": "gmail_list_labels",
-  "arguments": {}
-}
-```
-
-**Returns:**
-List of label objects with `id`, `name`, and `type`.
-
----
-
-#### gmail_create_label
-
-Create a new Gmail label.
-
-**Parameters:**
-- `name` (string, required): Label name
-
-**Example:**
-```json
-{
-  "tool": "gmail_create_label",
-  "arguments": {
-    "name": "ProjectX"
-  }
-}
-```
-
-**Returns:**
-Created label object with `id` and `name`.
-
----
-
-#### gmail_modify_message
-
-Modify labels on a message (mark read/unread, star, archive, etc.).
-
-**Parameters:**
-- `message_id` (string, required): Message ID
-- `add_labels` (array of strings, optional): Labels to add
-- `remove_labels` (array of strings, optional): Labels to remove
-
-**System Labels:**
-- `INBOX` - Message in inbox
-- `UNREAD` - Message is unread
-- `STARRED` - Message is starred
-- `IMPORTANT` - Message is important
-- `TRASH` - Message in trash
-- `SPAM` - Message is spam
-
-**Example (Mark as Read):**
-```json
-{
-  "tool": "gmail_modify_message",
-  "arguments": {
-    "message_id": "18c1a2b3d4e5f6g7",
-    "remove_labels": ["UNREAD"]
-  }
-}
-```
-
-**Example (Archive):**
-```json
-{
-  "tool": "gmail_modify_message",
-  "arguments": {
-    "message_id": "18c1a2b3d4e5f6g7",
-    "remove_labels": ["INBOX"]
-  }
-}
-```
-
-**Example (Star and Add Label):**
-```json
-{
-  "tool": "gmail_modify_message",
-  "arguments": {
-    "message_id": "18c1a2b3d4e5f6g7",
-    "add_labels": ["STARRED", "ProjectX"]
-  }
-}
-```
-
-**Returns:**
-Modified message object.
-
----
-
-#### gmail_create_draft
-
-Create a draft email.
-
-**Parameters:**
-- `to` (string, required): Recipient email
-- `subject` (string, required): Email subject
-- `body` (string, required): Email body
-- `html` (boolean, optional): Whether body is HTML (default: false)
-
-**Example:**
-```json
-{
-  "tool": "gmail_create_draft",
-  "arguments": {
-    "to": "recipient@example.com",
-    "subject": "Draft Subject",
-    "body": "This is a draft I'll send later."
-  }
-}
-```
-
-**Returns:**
-Draft object with `id` and message details.
-
----
-
-#### gmail_send_draft
-
-Send a previously created draft.
-
-**Parameters:**
-- `draft_id` (string, required): Draft ID to send
-
-**Example:**
-```json
-{
-  "tool": "gmail_send_draft",
-  "arguments": {
-    "draft_id": "r123456789"
-  }
-}
-```
-
-**Returns:**
-Sent message object.
-
----
-
-### Calendar Tools (4 tools)
+### Calendar Tools (1 tool)
 
 #### calendar_list_events
 
-List calendar events.
+List upcoming calendar events.
 
 **Parameters:**
-- `calendar_id` (string, optional): Calendar ID (default: "primary")
 - `max_results` (integer, optional): Maximum events to return (default: 100)
-- `query` (string, optional): Free text search query
+- `time_min` (string, optional): RFC3339 timestamp for earliest event (default: now)
+- `time_max` (string, optional): RFC3339 timestamp for latest event
 
-**Example (List Upcoming Events):**
+**Example (List Next 10 Events):**
 ```json
 {
   "tool": "calendar_list_events",
   "arguments": {
-    "calendar_id": "primary",
     "max_results": 10
   }
 }
 ```
 
-**Example (Search Events):**
+**Example (Events in Date Range):**
 ```json
 {
   "tool": "calendar_list_events",
   "arguments": {
-    "query": "team meeting"
+    "max_results": 50,
+    "time_min": "2025-12-01T00:00:00Z",
+    "time_max": "2025-12-31T23:59:59Z"
   }
 }
 ```
 
 **Returns:**
-List of event objects with details like `summary`, `start`, `end`, `attendees`.
-
----
-
-#### calendar_create_event
-
-Create a new calendar event.
-
-**Parameters:**
-- `summary` (string, required): Event title
-- `start_time` (string, required): Start time in ISO 8601 format
-- `end_time` (string, required): End time in ISO 8601 format
-- `description` (string, optional): Event description
-- `location` (string, optional): Event location
-- `attendees` (array of strings, optional): List of attendee emails
-
-**Example (Simple Event):**
 ```json
-{
-  "tool": "calendar_create_event",
-  "arguments": {
+[
+  {
+    "id": "abc123def456",
     "summary": "Team Meeting",
-    "start_time": "2025-12-05T10:00:00Z",
-    "end_time": "2025-12-05T11:00:00Z"
+    "start": {
+      "dateTime": "2025-12-05T10:00:00Z"
+    },
+    "end": {
+      "dateTime": "2025-12-05T11:00:00Z"
+    },
+    "attendees": [
+      {"email": "alice@example.com"},
+      {"email": "bob@example.com"}
+    ]
   }
-}
+]
 ```
 
-**Example (Event with Details):**
-```json
-{
-  "tool": "calendar_create_event",
-  "arguments": {
-    "summary": "Project Review",
-    "start_time": "2025-12-05T14:00:00Z",
-    "end_time": "2025-12-05T15:00:00Z",
-    "description": "Q4 project status review",
-    "location": "Conference Room A",
-    "attendees": ["alice@example.com", "bob@example.com"]
-  }
-}
-```
-
-**Returns:**
-Created event object with `id` and all details.
+List of event objects with details like `id`, `summary`, `start`, `end`, and `attendees`.
 
 ---
 
-#### calendar_update_event
-
-Update an existing calendar event.
-
-**Parameters:**
-- `event_id` (string, required): Event ID to update
-- `calendar_id` (string, optional): Calendar ID (default: "primary")
-- `summary` (string, optional): New event title
-- `start_time` (string, optional): New start time
-- `end_time` (string, optional): New end time
-
-**Example:**
-```json
-{
-  "tool": "calendar_update_event",
-  "arguments": {
-    "event_id": "abc123def456",
-    "summary": "Rescheduled Team Meeting",
-    "start_time": "2025-12-05T15:00:00Z",
-    "end_time": "2025-12-05T16:00:00Z"
-  }
-}
-```
-
-**Returns:**
-Updated event object.
-
----
-
-#### calendar_delete_event
-
-Delete a calendar event.
-
-**Parameters:**
-- `event_id` (string, required): Event ID to delete
-- `calendar_id` (string, optional): Calendar ID (default: "primary")
-
-**Example:**
-```json
-{
-  "tool": "calendar_delete_event",
-  "arguments": {
-    "event_id": "abc123def456"
-  }
-}
-```
-
-**Returns:**
-Success confirmation.
-
----
-
-### People (Contacts) Tools (4 tools)
+### People (Contacts) Tools (1 tool)
 
 #### people_list_contacts
 
 List all contacts.
 
 **Parameters:**
-- `page_size` (integer, optional): Number of contacts per page (default: 100)
+- `page_size` (integer, optional): Number of contacts to return (default: 100)
 
 **Example:**
 ```json
@@ -444,89 +165,27 @@ List all contacts.
 ```
 
 **Returns:**
-List of contact objects with names, emails, and phone numbers.
-
----
-
-#### people_search_contacts
-
-Search for contacts by name or email.
-
-**Parameters:**
-- `query` (string, required): Search query
-
-**Example:**
 ```json
-{
-  "tool": "people_search_contacts",
-  "arguments": {
-    "query": "John"
+[
+  {
+    "resourceName": "people/c123456789",
+    "names": [
+      {
+        "displayName": "Jane Doe",
+        "givenName": "Jane",
+        "familyName": "Doe"
+      }
+    ],
+    "emailAddresses": [
+      {
+        "value": "jane.doe@example.com"
+      }
+    ]
   }
-}
+]
 ```
 
-**Returns:**
-List of matching contact objects.
-
----
-
-#### people_create_contact
-
-Create a new contact.
-
-**Parameters:**
-- `given_name` (string, required): First name
-- `family_name` (string, optional): Last name
-- `email` (string, optional): Email address
-- `phone` (string, optional): Phone number
-
-**Example (Minimal):**
-```json
-{
-  "tool": "people_create_contact",
-  "arguments": {
-    "given_name": "Jane"
-  }
-}
-```
-
-**Example (Complete):**
-```json
-{
-  "tool": "people_create_contact",
-  "arguments": {
-    "given_name": "Jane",
-    "family_name": "Doe",
-    "email": "jane.doe@example.com",
-    "phone": "+1-555-0123"
-  }
-}
-```
-
-**Returns:**
-Created contact object with `resourceName` and all details.
-
----
-
-#### people_delete_contact
-
-Delete a contact.
-
-**Parameters:**
-- `resource_name` (string, required): Contact resource name (from contact object)
-
-**Example:**
-```json
-{
-  "tool": "people_delete_contact",
-  "arguments": {
-    "resource_name": "people/c123456789"
-  }
-}
-```
-
-**Returns:**
-Success confirmation.
+List of contact objects with names and email addresses.
 
 ---
 
@@ -539,69 +198,30 @@ Success confirmation.
 {
   "tool": "gmail_list_messages",
   "arguments": {
-    "query": "is:unread"
+    "query": "is:unread",
+    "max_results": 10
   }
 }
 ```
 
-**Read a specific email:**
+**Send a quick email:**
 ```json
 {
-  "tool": "gmail_get_message",
+  "tool": "gmail_send_message",
   "arguments": {
-    "message_id": "18c1a2b3d4e5f6g7"
+    "to": "colleague@example.com",
+    "subject": "Quick Question",
+    "body": "Hi! Do you have a moment to discuss the project?"
   }
 }
 ```
 
-**Mark as read and archive:**
+**Find emails from a specific sender:**
 ```json
 {
-  "tool": "gmail_modify_message",
+  "tool": "gmail_list_messages",
   "arguments": {
-    "message_id": "18c1a2b3d4e5f6g7",
-    "remove_labels": ["INBOX", "UNREAD"]
-  }
-}
-```
-
-**Create draft and send later:**
-```json
-// Step 1: Create draft
-{
-  "tool": "gmail_create_draft",
-  "arguments": {
-    "to": "recipient@example.com",
-    "subject": "Follow-up",
-    "body": "Draft message"
-  }
-}
-
-// Step 2: Send when ready
-{
-  "tool": "gmail_send_draft",
-  "arguments": {
-    "draft_id": "r123456789"
-  }
-}
-```
-
-**Organize with labels:**
-```json
-// Create label
-{
-  "tool": "gmail_create_label",
-  "arguments": {
-    "name": "Important-Client"
-  }
-}
-
-// Apply label
-{
-  "tool": "gmail_modify_message",
-  "arguments": {
-    "message_id": "18c1a2b3d4e5f6g7",
-    "add_labels": ["Important-Client"]
+    "query": "from:manager@example.com is:unread"
   }
 }
 ```
@@ -620,37 +240,14 @@ Success confirmation.
 }
 ```
 
-**Schedule a meeting:**
+**List this week's events:**
 ```json
 {
-  "tool": "calendar_create_event",
+  "tool": "calendar_list_events",
   "arguments": {
-    "summary": "Weekly Standup",
-    "start_time": "2025-12-05T09:00:00Z",
-    "end_time": "2025-12-05T09:30:00Z",
-    "attendees": ["team@example.com"]
-  }
-}
-```
-
-**Reschedule a meeting:**
-```json
-{
-  "tool": "calendar_update_event",
-  "arguments": {
-    "event_id": "abc123",
-    "start_time": "2025-12-05T10:00:00Z",
-    "end_time": "2025-12-05T10:30:00Z"
-  }
-}
-```
-
-**Cancel a meeting:**
-```json
-{
-  "tool": "calendar_delete_event",
-  "arguments": {
-    "event_id": "abc123"
+    "max_results": 50,
+    "time_min": "2025-12-01T00:00:00Z",
+    "time_max": "2025-12-07T23:59:59Z"
   }
 }
 ```
@@ -659,49 +256,26 @@ Success confirmation.
 
 ### Contact Management
 
-**Find a contact:**
+**List all contacts:**
 ```json
 {
-  "tool": "people_search_contacts",
+  "tool": "people_list_contacts",
   "arguments": {
-    "query": "John Doe"
+    "page_size": 100
   }
 }
 ```
 
-**Add new contact:**
+**Find a contact's email:**
 ```json
 {
-  "tool": "people_create_contact",
+  "tool": "people_list_contacts",
   "arguments": {
-    "given_name": "Alice",
-    "family_name": "Smith",
-    "email": "alice@example.com",
-    "phone": "+1-555-0199"
+    "page_size": 1000
   }
 }
 ```
-
-**Email a contact:**
-```json
-// Step 1: Search for contact
-{
-  "tool": "people_search_contacts",
-  "arguments": {
-    "query": "John Doe"
-  }
-}
-
-// Step 2: Extract email and send
-{
-  "tool": "gmail_send_message",
-  "arguments": {
-    "to": "john.doe@example.com",
-    "subject": "Hello",
-    "body": "Message to contact"
-  }
-}
-```
+Then search the results for the contact by name.
 
 ---
 
@@ -709,20 +283,19 @@ Success confirmation.
 
 ### Email
 1. **Use specific queries** - Narrow down message searches with precise Gmail query syntax
-2. **Batch operations** - Process multiple messages efficiently
-3. **Labels over deletion** - Use labels and archive instead of permanent deletion
-4. **Draft workflow** - Create drafts for important emails, review before sending
+2. **Limit results** - Use `max_results` to avoid overwhelming responses
+3. **Plain text only** - Current implementation supports plain text email bodies
+4. **Single recipient** - Send to one recipient at a time (no CC/BCC in current version)
 
 ### Calendar
-1. **Include attendees** - Always specify attendees for meetings
-2. **Add locations** - Specify location for physical meetings or video conference links
-3. **Descriptive summaries** - Use clear, searchable event titles
-4. **Time zones** - Use ISO 8601 format with timezone (Z for UTC)
+1. **Time zones** - Always use ISO 8601 format with timezone (Z for UTC)
+2. **Narrow date ranges** - Use `time_min` and `time_max` for specific periods
+3. **Limit results** - Set `max_results` to reasonable values (10-50 for most use cases)
 
 ### Contacts
-1. **Complete information** - Add as much detail as available (name, email, phone)
-2. **Search before create** - Check if contact exists before creating duplicates
-3. **Use resource_name** - Save the `resourceName` field for updates/deletes
+1. **Pagination** - Use `page_size` to control result size
+2. **Post-processing** - Filter and search results in your application logic
+3. **Cache when possible** - Contacts don't change frequently
 
 ### General
 1. **Check for errors** - All tools return error information if operations fail
@@ -737,8 +310,7 @@ All tools return errors in this format:
 
 ```json
 {
-  "error": "Error message",
-  "details": "Detailed error information"
+  "error": "Error message describing what went wrong"
 }
 ```
 
@@ -763,6 +335,60 @@ All tools return errors in this format:
 - Check required fields and data formats
 - Verify ISO 8601 datetime format for calendar events
 
+**500 - Server Error**
+- Google API server error
+- Server automatically retries
+- If persistent, check Google API status
+
+---
+
+## Response Formats
+
+All successful tool calls return JSON data.
+
+### Gmail Message Object
+```json
+{
+  "id": "string",
+  "threadId": "string",
+  "labelIds": ["string"]
+}
+```
+
+### Calendar Event Object
+```json
+{
+  "id": "string",
+  "summary": "string",
+  "start": {
+    "dateTime": "RFC3339 timestamp"
+  },
+  "end": {
+    "dateTime": "RFC3339 timestamp"
+  },
+  "attendees": [
+    {"email": "string"}
+  ]
+}
+```
+
+### Contact Object
+```json
+{
+  "resourceName": "string",
+  "names": [
+    {
+      "displayName": "string",
+      "givenName": "string",
+      "familyName": "string"
+    }
+  ],
+  "emailAddresses": [
+    {"value": "string"}
+  ]
+}
+```
+
 ---
 
 ## Testing with Ish Mode
@@ -776,7 +402,34 @@ export ISH_BASE_URL=http://localhost:9000
 export ISH_USER=testuser
 
 # Run server
-uv run python -m gsuite_mcp
+./gsuite-mcp
 ```
 
-All tools work identically in ish mode. See [ISH_MODE.md](ISH_MODE.md) for details.
+All tools work identically in ish mode. See [setup.md](setup.md) for ish mode configuration details.
+
+---
+
+## Future Tools (Planned)
+
+The following tools are planned for future releases:
+
+### Gmail
+- `gmail_get_message` - Get full message content
+- `gmail_modify_message` - Modify labels (mark read/unread, star, archive)
+- `gmail_reply_to_message` - Reply to existing threads
+- `gmail_create_draft` - Create draft emails
+- `gmail_list_labels` - List all labels
+- `gmail_create_label` - Create new labels
+
+### Calendar
+- `calendar_create_event` - Create new events
+- `calendar_update_event` - Update existing events
+- `calendar_delete_event` - Delete events
+
+### People
+- `people_search_contacts` - Search contacts
+- `people_create_contact` - Create new contacts
+- `people_update_contact` - Update existing contacts
+- `people_delete_contact` - Delete contacts
+
+See the project roadmap for implementation timeline.
