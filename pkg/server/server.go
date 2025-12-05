@@ -18,6 +18,7 @@ import (
 
 	"github.com/mark3labs/mcp-go/mcp"
 	"github.com/mark3labs/mcp-go/server"
+	googlecalendar "google.golang.org/api/calendar/v3"
 	googlepeople "google.golang.org/api/people/v1"
 )
 
@@ -612,6 +613,9 @@ func (s *Server) handleCalendarUpdateEvent(ctx context.Context, request mcp.Call
 		if err != nil {
 			return mcp.NewToolResultError(fmt.Sprintf("invalid start_time format: %v", err)), nil
 		}
+		if event.Start == nil {
+			event.Start = &googlecalendar.EventDateTime{}
+		}
 		event.Start.DateTime = startTime.Format(time.RFC3339)
 	}
 
@@ -619,6 +623,9 @@ func (s *Server) handleCalendarUpdateEvent(ctx context.Context, request mcp.Call
 		endTime, err := time.Parse(time.RFC3339, endTimeStr)
 		if err != nil {
 			return mcp.NewToolResultError(fmt.Sprintf("invalid end_time format: %v", err)), nil
+		}
+		if event.End == nil {
+			event.End = &googlecalendar.EventDateTime{}
 		}
 		event.End.DateTime = endTime.Format(time.RFC3339)
 	}
