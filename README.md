@@ -2,6 +2,8 @@
 
 A Model Context Protocol (MCP) server that provides programmatic access to Google Workspace APIs including Gmail, Google Calendar, and Google Contacts. Built in Go for performance and reliability.
 
+![GSuite MCP Server](docs/gsuite_mcp.png)
+
 ## Features
 
 - **Gmail Integration**: List and send email messages with Gmail query syntax
