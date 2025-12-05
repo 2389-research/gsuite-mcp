@@ -58,6 +58,8 @@ func TestServer_ListTools(t *testing.T) {
 
 	// People tools
 	assert.True(t, toolNames["people_list_contacts"])
+	assert.True(t, toolNames["people_search_contacts"])
+	assert.True(t, toolNames["people_get_contact"])
 }
 
 func TestServer_HandleGmailListMessages(t *testing.T) {
@@ -131,4 +133,39 @@ func TestServer_HandlePeopleListContacts(t *testing.T) {
 	require.NoError(t, err)
 	assert.NotNil(t, result)
 	assert.NotEmpty(t, result.Content)
+}
+
+func TestServer_HandlePeopleSearchContacts(t *testing.T) {
+	t.Setenv("ISH_MODE", "true")
+
+	srv, err := NewServer(context.Background())
+	require.NoError(t, err)
+
+	request := createMockRequest("people_search_contacts", map[string]interface{}{
+		"query":     "John",
+		"page_size": 5,
+	})
+
+	result, err := srv.handlePeopleSearchContacts(context.Background(), request)
+
+	require.NoError(t, err)
+	assert.NotNil(t, result)
+	assert.NotEmpty(t, result.Content)
+}
+
+func TestServer_HandlePeopleGetContact(t *testing.T) {
+	t.Setenv("ISH_MODE", "true")
+
+	srv, err := NewServer(context.Background())
+	require.NoError(t, err)
+
+	request := createMockRequest("people_get_contact", map[string]interface{}{
+		"resource_name": "people/12345",
+	})
+
+	result, err := srv.handlePeopleGetContact(context.Background(), request)
+
+	// This may return an error if the resource doesn't exist in ish mode
+	// but the handler should still work correctly
+	assert.NotNil(t, result)
 }

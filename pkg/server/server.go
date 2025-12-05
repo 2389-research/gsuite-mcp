@@ -134,6 +134,31 @@ func (s *Server) registerTools() {
 			},
 		},
 	}, s.handlePeopleListContacts)
+
+	s.mcp.AddTool(mcp.Tool{
+		Name:        "people_search_contacts",
+		Description: "Search contacts by name, email, or phone number",
+		InputSchema: mcp.ToolInputSchema{
+			Type: "object",
+			Properties: map[string]interface{}{
+				"query":     map[string]string{"type": "string", "description": "Search query (name, email, phone, etc)"},
+				"page_size": map[string]string{"type": "integer"},
+			},
+			Required: []string{"query"},
+		},
+	}, s.handlePeopleSearchContacts)
+
+	s.mcp.AddTool(mcp.Tool{
+		Name:        "people_get_contact",
+		Description: "Get detailed information about a specific contact",
+		InputSchema: mcp.ToolInputSchema{
+			Type: "object",
+			Properties: map[string]interface{}{
+				"resource_name": map[string]string{"type": "string", "description": "Resource name of the person (e.g., people/12345)"},
+			},
+			Required: []string{"resource_name"},
+		},
+	}, s.handlePeopleGetContact)
 }
 
 // Tool handlers
@@ -210,6 +235,36 @@ func (s *Server) handlePeopleListContacts(ctx context.Context, request mcp.CallT
 	}
 
 	return mcp.NewToolResultJSON(contacts)
+}
+
+func (s *Server) handlePeopleSearchContacts(ctx context.Context, request mcp.CallToolRequest) (*mcp.CallToolResult, error) {
+	query, err := request.RequireString("query")
+	if err != nil {
+		return mcp.NewToolResultError(err.Error()), nil
+	}
+
+	pageSize := int64(request.GetInt("page_size", 10))
+
+	contacts, err := s.people.SearchContacts(ctx, query, pageSize)
+	if err != nil {
+		return mcp.NewToolResultError(err.Error()), nil
+	}
+
+	return mcp.NewToolResultJSON(contacts)
+}
+
+func (s *Server) handlePeopleGetContact(ctx context.Context, request mcp.CallToolRequest) (*mcp.CallToolResult, error) {
+	resourceName, err := request.RequireString("resource_name")
+	if err != nil {
+		return mcp.NewToolResultError(err.Error()), nil
+	}
+
+	person, err := s.people.GetPerson(ctx, resourceName)
+	if err != nil {
+		return mcp.NewToolResultError(err.Error()), nil
+	}
+
+	return mcp.NewToolResultJSON(person)
 }
 
 // ListTools returns all registered tools
