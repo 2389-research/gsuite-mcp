@@ -8,6 +8,7 @@ import (
 	"fmt"
 	"net/http"
 	"os"
+	"strings"
 	"time"
 
 	"github.com/harper/gsuite-mcp/pkg/auth"
@@ -17,6 +18,7 @@ import (
 
 	"github.com/mark3labs/mcp-go/mcp"
 	"github.com/mark3labs/mcp-go/server"
+	googlepeople "google.golang.org/api/people/v1"
 )
 
 // Server is the MCP server for GSuite APIs
@@ -96,6 +98,18 @@ func (s *Server) registerTools() {
 	}, s.handleGmailListMessages)
 
 	s.mcp.AddTool(mcp.Tool{
+		Name:        "gmail_get_message",
+		Description: "Get a specific email message by ID",
+		InputSchema: mcp.ToolInputSchema{
+			Type: "object",
+			Properties: map[string]interface{}{
+				"message_id": map[string]string{"type": "string", "description": "The message ID to retrieve"},
+			},
+			Required: []string{"message_id"},
+		},
+	}, s.handleGmailGetMessage)
+
+	s.mcp.AddTool(mcp.Tool{
 		Name:        "gmail_send_message",
 		Description: "Send an email",
 		InputSchema: mcp.ToolInputSchema{
@@ -108,6 +122,70 @@ func (s *Server) registerTools() {
 			Required: []string{"to", "subject", "body"},
 		},
 	}, s.handleGmailSendMessage)
+
+	s.mcp.AddTool(mcp.Tool{
+		Name:        "gmail_create_draft",
+		Description: "Create a draft email",
+		InputSchema: mcp.ToolInputSchema{
+			Type: "object",
+			Properties: map[string]interface{}{
+				"to":      map[string]string{"type": "string"},
+				"subject": map[string]string{"type": "string"},
+				"body":    map[string]string{"type": "string"},
+			},
+			Required: []string{"to", "subject", "body"},
+		},
+	}, s.handleGmailCreateDraft)
+
+	s.mcp.AddTool(mcp.Tool{
+		Name:        "gmail_send_draft",
+		Description: "Send an existing draft",
+		InputSchema: mcp.ToolInputSchema{
+			Type: "object",
+			Properties: map[string]interface{}{
+				"draft_id": map[string]string{"type": "string", "description": "The draft ID to send"},
+			},
+			Required: []string{"draft_id"},
+		},
+	}, s.handleGmailSendDraft)
+
+	s.mcp.AddTool(mcp.Tool{
+		Name:        "gmail_modify_labels",
+		Description: "Add or remove labels from a message (archive, star, mark as read, etc.)",
+		InputSchema: mcp.ToolInputSchema{
+			Type: "object",
+			Properties: map[string]interface{}{
+				"message_id":    map[string]string{"type": "string", "description": "The message ID to modify"},
+				"add_labels":    map[string]string{"type": "array", "description": "Label IDs to add (e.g., STARRED, IMPORTANT)"},
+				"remove_labels": map[string]string{"type": "array", "description": "Label IDs to remove (e.g., UNREAD, INBOX)"},
+			},
+			Required: []string{"message_id"},
+		},
+	}, s.handleGmailModifyLabels)
+
+	s.mcp.AddTool(mcp.Tool{
+		Name:        "gmail_trash_message",
+		Description: "Move a message to trash",
+		InputSchema: mcp.ToolInputSchema{
+			Type: "object",
+			Properties: map[string]interface{}{
+				"message_id": map[string]string{"type": "string", "description": "The message ID to trash"},
+			},
+			Required: []string{"message_id"},
+		},
+	}, s.handleGmailTrashMessage)
+
+	s.mcp.AddTool(mcp.Tool{
+		Name:        "gmail_delete_message",
+		Description: "Permanently delete a message",
+		InputSchema: mcp.ToolInputSchema{
+			Type: "object",
+			Properties: map[string]interface{}{
+				"message_id": map[string]string{"type": "string", "description": "The message ID to delete permanently"},
+			},
+			Required: []string{"message_id"},
+		},
+	}, s.handleGmailDeleteMessage)
 
 	// Calendar tools
 	s.mcp.AddTool(mcp.Tool{
@@ -214,6 +292,49 @@ func (s *Server) registerTools() {
 			Required: []string{"resource_name"},
 		},
 	}, s.handlePeopleGetContact)
+
+	s.mcp.AddTool(mcp.Tool{
+		Name:        "people_create_contact",
+		Description: "Create a new contact",
+		InputSchema: mcp.ToolInputSchema{
+			Type: "object",
+			Properties: map[string]interface{}{
+				"given_name":  map[string]string{"type": "string", "description": "First name"},
+				"family_name": map[string]string{"type": "string", "description": "Last name"},
+				"email":       map[string]string{"type": "string", "description": "Email address"},
+				"phone":       map[string]string{"type": "string", "description": "Phone number"},
+			},
+			Required: []string{"given_name"},
+		},
+	}, s.handlePeopleCreateContact)
+
+	s.mcp.AddTool(mcp.Tool{
+		Name:        "people_update_contact",
+		Description: "Update an existing contact",
+		InputSchema: mcp.ToolInputSchema{
+			Type: "object",
+			Properties: map[string]interface{}{
+				"resource_name": map[string]string{"type": "string", "description": "Resource name of the person (e.g., people/12345)"},
+				"given_name":    map[string]string{"type": "string", "description": "First name"},
+				"family_name":   map[string]string{"type": "string", "description": "Last name"},
+				"email":         map[string]string{"type": "string", "description": "Email address"},
+				"phone":         map[string]string{"type": "string", "description": "Phone number"},
+			},
+			Required: []string{"resource_name"},
+		},
+	}, s.handlePeopleUpdateContact)
+
+	s.mcp.AddTool(mcp.Tool{
+		Name:        "people_delete_contact",
+		Description: "Delete a contact",
+		InputSchema: mcp.ToolInputSchema{
+			Type: "object",
+			Properties: map[string]interface{}{
+				"resource_name": map[string]string{"type": "string", "description": "Resource name of the person (e.g., people/12345)"},
+			},
+			Required: []string{"resource_name"},
+		},
+	}, s.handlePeopleDeleteContact)
 }
 
 // Tool handlers
@@ -227,6 +348,20 @@ func (s *Server) handleGmailListMessages(ctx context.Context, request mcp.CallTo
 	}
 
 	return mcp.NewToolResultJSON(messages)
+}
+
+func (s *Server) handleGmailGetMessage(ctx context.Context, request mcp.CallToolRequest) (*mcp.CallToolResult, error) {
+	messageID, err := request.RequireString("message_id")
+	if err != nil {
+		return mcp.NewToolResultError(err.Error()), nil
+	}
+
+	msg, err := s.gmail.GetMessage(ctx, messageID)
+	if err != nil {
+		return mcp.NewToolResultError(err.Error()), nil
+	}
+
+	return mcp.NewToolResultJSON(msg)
 }
 
 func (s *Server) handleGmailSendMessage(ctx context.Context, request mcp.CallToolRequest) (*mcp.CallToolResult, error) {
@@ -251,6 +386,118 @@ func (s *Server) handleGmailSendMessage(ctx context.Context, request mcp.CallToo
 	}
 
 	return mcp.NewToolResultJSON(msg)
+}
+
+func (s *Server) handleGmailCreateDraft(ctx context.Context, request mcp.CallToolRequest) (*mcp.CallToolResult, error) {
+	to, err := request.RequireString("to")
+	if err != nil {
+		return mcp.NewToolResultError(err.Error()), nil
+	}
+
+	subject, err := request.RequireString("subject")
+	if err != nil {
+		return mcp.NewToolResultError(err.Error()), nil
+	}
+
+	body, err := request.RequireString("body")
+	if err != nil {
+		return mcp.NewToolResultError(err.Error()), nil
+	}
+
+	draft, err := s.gmail.CreateDraft(ctx, to, subject, body)
+	if err != nil {
+		return mcp.NewToolResultError(err.Error()), nil
+	}
+
+	return mcp.NewToolResultJSON(draft)
+}
+
+func (s *Server) handleGmailSendDraft(ctx context.Context, request mcp.CallToolRequest) (*mcp.CallToolResult, error) {
+	draftID, err := request.RequireString("draft_id")
+	if err != nil {
+		return mcp.NewToolResultError(err.Error()), nil
+	}
+
+	msg, err := s.gmail.SendDraft(ctx, draftID)
+	if err != nil {
+		return mcp.NewToolResultError(err.Error()), nil
+	}
+
+	return mcp.NewToolResultJSON(msg)
+}
+
+func (s *Server) handleGmailModifyLabels(ctx context.Context, request mcp.CallToolRequest) (*mcp.CallToolResult, error) {
+	messageID, err := request.RequireString("message_id")
+	if err != nil {
+		return mcp.NewToolResultError(err.Error()), nil
+	}
+
+	// Get array parameters - these come as []interface{} from MCP
+	// Need to cast Arguments to map first
+	args, ok := request.Params.Arguments.(map[string]interface{})
+	if !ok {
+		return mcp.NewToolResultError("invalid arguments format"), nil
+	}
+
+	addLabelsRaw := args["add_labels"]
+	removeLabelsRaw := args["remove_labels"]
+
+	var addLabels, removeLabels []string
+
+	if addLabelsRaw != nil {
+		if arr, ok := addLabelsRaw.([]interface{}); ok {
+			for _, v := range arr {
+				if str, ok := v.(string); ok {
+					addLabels = append(addLabels, str)
+				}
+			}
+		}
+	}
+
+	if removeLabelsRaw != nil {
+		if arr, ok := removeLabelsRaw.([]interface{}); ok {
+			for _, v := range arr {
+				if str, ok := v.(string); ok {
+					removeLabels = append(removeLabels, str)
+				}
+			}
+		}
+	}
+
+	modified, err := s.gmail.ModifyLabels(ctx, messageID, addLabels, removeLabels)
+	if err != nil {
+		return mcp.NewToolResultError(err.Error()), nil
+	}
+
+	return mcp.NewToolResultJSON(modified)
+}
+
+func (s *Server) handleGmailTrashMessage(ctx context.Context, request mcp.CallToolRequest) (*mcp.CallToolResult, error) {
+	messageID, err := request.RequireString("message_id")
+	if err != nil {
+		return mcp.NewToolResultError(err.Error()), nil
+	}
+
+	trashed, err := s.gmail.TrashMessage(ctx, messageID)
+	if err != nil {
+		return mcp.NewToolResultError(err.Error()), nil
+	}
+
+	return mcp.NewToolResultJSON(trashed)
+}
+
+func (s *Server) handleGmailDeleteMessage(ctx context.Context, request mcp.CallToolRequest) (*mcp.CallToolResult, error) {
+	messageID, err := request.RequireString("message_id")
+	if err != nil {
+		return mcp.NewToolResultError(err.Error()), nil
+	}
+
+	err = s.gmail.DeleteMessage(ctx, messageID)
+	if err != nil {
+		return mcp.NewToolResultError(err.Error()), nil
+	}
+
+	return mcp.NewToolResultText(fmt.Sprintf("Message %s deleted successfully", messageID)), nil
 }
 
 func (s *Server) handleCalendarListEvents(ctx context.Context, request mcp.CallToolRequest) (*mcp.CallToolResult, error) {
@@ -429,6 +676,122 @@ func (s *Server) handlePeopleGetContact(ctx context.Context, request mcp.CallToo
 	}
 
 	return mcp.NewToolResultJSON(person)
+}
+
+func (s *Server) handlePeopleCreateContact(ctx context.Context, request mcp.CallToolRequest) (*mcp.CallToolResult, error) {
+	givenName, err := request.RequireString("given_name")
+	if err != nil {
+		return mcp.NewToolResultError(err.Error()), nil
+	}
+
+	familyName := request.GetString("family_name", "")
+	email := request.GetString("email", "")
+	phone := request.GetString("phone", "")
+
+	// Build Person object
+	person := &googlepeople.Person{
+		Names: []*googlepeople.Name{
+			{
+				GivenName:  givenName,
+				FamilyName: familyName,
+			},
+		},
+	}
+
+	if email != "" {
+		person.EmailAddresses = []*googlepeople.EmailAddress{
+			{Value: email},
+		}
+	}
+
+	if phone != "" {
+		person.PhoneNumbers = []*googlepeople.PhoneNumber{
+			{Value: phone},
+		}
+	}
+
+	created, err := s.people.CreateContact(ctx, person)
+	if err != nil {
+		return mcp.NewToolResultError(err.Error()), nil
+	}
+
+	return mcp.NewToolResultJSON(created)
+}
+
+func (s *Server) handlePeopleUpdateContact(ctx context.Context, request mcp.CallToolRequest) (*mcp.CallToolResult, error) {
+	resourceName, err := request.RequireString("resource_name")
+	if err != nil {
+		return mcp.NewToolResultError(err.Error()), nil
+	}
+
+	// Get existing contact first
+	person, err := s.people.GetPerson(ctx, resourceName)
+	if err != nil {
+		return mcp.NewToolResultError(err.Error()), nil
+	}
+
+	var updateFields []string
+
+	// Update fields if provided
+	if givenName := request.GetString("given_name", ""); givenName != "" {
+		if len(person.Names) == 0 {
+			person.Names = []*googlepeople.Name{{}}
+		}
+		person.Names[0].GivenName = givenName
+		updateFields = append(updateFields, "names")
+	}
+
+	if familyName := request.GetString("family_name", ""); familyName != "" {
+		if len(person.Names) == 0 {
+			person.Names = []*googlepeople.Name{{}}
+		}
+		person.Names[0].FamilyName = familyName
+		updateFields = append(updateFields, "names")
+	}
+
+	if email := request.GetString("email", ""); email != "" {
+		if len(person.EmailAddresses) == 0 {
+			person.EmailAddresses = []*googlepeople.EmailAddress{{}}
+		}
+		person.EmailAddresses[0].Value = email
+		updateFields = append(updateFields, "emailAddresses")
+	}
+
+	if phone := request.GetString("phone", ""); phone != "" {
+		if len(person.PhoneNumbers) == 0 {
+			person.PhoneNumbers = []*googlepeople.PhoneNumber{{}}
+		}
+		person.PhoneNumbers[0].Value = phone
+		updateFields = append(updateFields, "phoneNumbers")
+	}
+
+	if len(updateFields) == 0 {
+		return mcp.NewToolResultError("no fields to update"), nil
+	}
+
+	// Build update mask
+	updateMask := strings.Join(updateFields, ",")
+
+	updated, err := s.people.UpdateContact(ctx, resourceName, person, updateMask)
+	if err != nil {
+		return mcp.NewToolResultError(err.Error()), nil
+	}
+
+	return mcp.NewToolResultJSON(updated)
+}
+
+func (s *Server) handlePeopleDeleteContact(ctx context.Context, request mcp.CallToolRequest) (*mcp.CallToolResult, error) {
+	resourceName, err := request.RequireString("resource_name")
+	if err != nil {
+		return mcp.NewToolResultError(err.Error()), nil
+	}
+
+	err = s.people.DeleteContact(ctx, resourceName)
+	if err != nil {
+		return mcp.NewToolResultError(err.Error()), nil
+	}
+
+	return mcp.NewToolResultText(fmt.Sprintf("Contact %s deleted successfully", resourceName)), nil
 }
 
 // ListTools returns all registered tools

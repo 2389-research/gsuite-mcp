@@ -117,3 +117,54 @@ func (s *Service) GetPerson(ctx context.Context, resourceName string) (*people.P
 	}
 	return person, nil
 }
+
+// CreateContact creates a new contact
+func (s *Service) CreateContact(ctx context.Context, person *people.Person) (*people.Person, error) {
+	var created *people.Person
+
+	err := retry.WithRetry(func() error {
+		var err error
+		created, err = s.svc.People.CreateContact(person).Context(ctx).Do()
+		return err
+	}, 3, time.Second)
+
+	if err != nil {
+		return nil, fmt.Errorf("unable to create contact: %w", err)
+	}
+
+	return created, nil
+}
+
+// UpdateContact updates an existing contact
+func (s *Service) UpdateContact(ctx context.Context, resourceName string, person *people.Person, updateMask string) (*people.Person, error) {
+	var updated *people.Person
+
+	err := retry.WithRetry(func() error {
+		var err error
+		updated, err = s.svc.People.UpdateContact(resourceName, person).
+			Context(ctx).
+			UpdatePersonFields(updateMask).
+			Do()
+		return err
+	}, 3, time.Second)
+
+	if err != nil {
+		return nil, fmt.Errorf("unable to update contact: %w", err)
+	}
+
+	return updated, nil
+}
+
+// DeleteContact deletes a contact
+func (s *Service) DeleteContact(ctx context.Context, resourceName string) error {
+	err := retry.WithRetry(func() error {
+		_, err := s.svc.People.DeleteContact(resourceName).Context(ctx).Do()
+		return err
+	}, 3, time.Second)
+
+	if err != nil {
+		return fmt.Errorf("unable to delete contact: %w", err)
+	}
+
+	return nil
+}

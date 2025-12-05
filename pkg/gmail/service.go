@@ -108,3 +108,98 @@ func (s *Service) SendMessage(ctx context.Context, to, subject, body string) (*g
 
 	return sent, nil
 }
+
+// CreateDraft creates a new draft email
+func (s *Service) CreateDraft(ctx context.Context, to, subject, body string) (*gmail.Draft, error) {
+	message := fmt.Sprintf("To: %s\r\nSubject: %s\r\n\r\n%s", to, subject, body)
+	encoded := base64.URLEncoding.EncodeToString([]byte(message))
+
+	draft := &gmail.Draft{
+		Message: &gmail.Message{
+			Raw: encoded,
+		},
+	}
+
+	var created *gmail.Draft
+	err := retry.WithRetry(func() error {
+		var err error
+		created, err = s.svc.Users.Drafts.Create("me", draft).Context(ctx).Do()
+		return err
+	}, 3, time.Second)
+
+	if err != nil {
+		return nil, fmt.Errorf("unable to create draft: %w", err)
+	}
+
+	return created, nil
+}
+
+// SendDraft sends an existing draft
+func (s *Service) SendDraft(ctx context.Context, draftID string) (*gmail.Message, error) {
+	draft := &gmail.Draft{
+		Id: draftID,
+	}
+
+	var sent *gmail.Message
+	err := retry.WithRetry(func() error {
+		var err error
+		sent, err = s.svc.Users.Drafts.Send("me", draft).Context(ctx).Do()
+		return err
+	}, 3, time.Second)
+
+	if err != nil {
+		return nil, fmt.Errorf("unable to send draft: %w", err)
+	}
+
+	return sent, nil
+}
+
+// ModifyLabels adds or removes labels from a message
+func (s *Service) ModifyLabels(ctx context.Context, messageID string, addLabels, removeLabels []string) (*gmail.Message, error) {
+	req := &gmail.ModifyMessageRequest{
+		AddLabelIds:    addLabels,
+		RemoveLabelIds: removeLabels,
+	}
+
+	var modified *gmail.Message
+	err := retry.WithRetry(func() error {
+		var err error
+		modified, err = s.svc.Users.Messages.Modify("me", messageID, req).Context(ctx).Do()
+		return err
+	}, 3, time.Second)
+
+	if err != nil {
+		return nil, fmt.Errorf("unable to modify labels: %w", err)
+	}
+
+	return modified, nil
+}
+
+// DeleteMessage permanently deletes a message
+func (s *Service) DeleteMessage(ctx context.Context, messageID string) error {
+	err := retry.WithRetry(func() error {
+		return s.svc.Users.Messages.Delete("me", messageID).Context(ctx).Do()
+	}, 3, time.Second)
+
+	if err != nil {
+		return fmt.Errorf("unable to delete message: %w", err)
+	}
+
+	return nil
+}
+
+// TrashMessage moves a message to trash
+func (s *Service) TrashMessage(ctx context.Context, messageID string) (*gmail.Message, error) {
+	var trashed *gmail.Message
+	err := retry.WithRetry(func() error {
+		var err error
+		trashed, err = s.svc.Users.Messages.Trash("me", messageID).Context(ctx).Do()
+		return err
+	}, 3, time.Second)
+
+	if err != nil {
+		return nil, fmt.Errorf("unable to trash message: %w", err)
+	}
+
+	return trashed, nil
+}
