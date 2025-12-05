@@ -88,6 +88,13 @@ func (s *Service) GetMessage(ctx context.Context, messageID string) (*gmail.Mess
 
 // SendMessage sends an email
 func (s *Service) SendMessage(ctx context.Context, to, subject, body string) (*gmail.Message, error) {
+	if to == "" {
+		return nil, fmt.Errorf("recipient address (to) cannot be empty")
+	}
+	if subject == "" {
+		return nil, fmt.Errorf("subject cannot be empty")
+	}
+
 	message := fmt.Sprintf("To: %s\r\nSubject: %s\r\n\r\n%s", to, subject, body)
 	encoded := base64.URLEncoding.EncodeToString([]byte(message))
 
@@ -111,6 +118,13 @@ func (s *Service) SendMessage(ctx context.Context, to, subject, body string) (*g
 
 // CreateDraft creates a new draft email
 func (s *Service) CreateDraft(ctx context.Context, to, subject, body string) (*gmail.Draft, error) {
+	if to == "" {
+		return nil, fmt.Errorf("recipient address (to) cannot be empty")
+	}
+	if subject == "" {
+		return nil, fmt.Errorf("subject cannot be empty")
+	}
+
 	message := fmt.Sprintf("To: %s\r\nSubject: %s\r\n\r\n%s", to, subject, body)
 	encoded := base64.URLEncoding.EncodeToString([]byte(message))
 

@@ -155,9 +155,17 @@ func (s *Server) registerTools() {
 		InputSchema: mcp.ToolInputSchema{
 			Type: "object",
 			Properties: map[string]interface{}{
-				"message_id":    map[string]string{"type": "string", "description": "The message ID to modify"},
-				"add_labels":    map[string]string{"type": "array", "description": "Label IDs to add (e.g., STARRED, IMPORTANT)"},
-				"remove_labels": map[string]string{"type": "array", "description": "Label IDs to remove (e.g., UNREAD, INBOX)"},
+				"message_id": map[string]string{"type": "string", "description": "The message ID to modify"},
+				"add_labels": map[string]interface{}{
+					"type":        "array",
+					"items":       map[string]string{"type": "string"},
+					"description": "Label IDs to add (e.g., STARRED, IMPORTANT)",
+				},
+				"remove_labels": map[string]interface{}{
+					"type":        "array",
+					"items":       map[string]string{"type": "string"},
+					"description": "Label IDs to remove (e.g., UNREAD, INBOX)",
+				},
 			},
 			Required: []string{"message_id"},
 		},
@@ -731,6 +739,7 @@ func (s *Server) handlePeopleUpdateContact(ctx context.Context, request mcp.Call
 	}
 
 	var updateFields []string
+	var namesUpdated bool
 
 	// Update fields if provided
 	if givenName := request.GetString("given_name", ""); givenName != "" {
@@ -738,7 +747,7 @@ func (s *Server) handlePeopleUpdateContact(ctx context.Context, request mcp.Call
 			person.Names = []*googlepeople.Name{{}}
 		}
 		person.Names[0].GivenName = givenName
-		updateFields = append(updateFields, "names")
+		namesUpdated = true
 	}
 
 	if familyName := request.GetString("family_name", ""); familyName != "" {
@@ -746,6 +755,10 @@ func (s *Server) handlePeopleUpdateContact(ctx context.Context, request mcp.Call
 			person.Names = []*googlepeople.Name{{}}
 		}
 		person.Names[0].FamilyName = familyName
+		namesUpdated = true
+	}
+
+	if namesUpdated {
 		updateFields = append(updateFields, "names")
 	}
 

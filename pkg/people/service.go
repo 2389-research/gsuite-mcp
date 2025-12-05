@@ -158,8 +158,8 @@ func (s *Service) UpdateContact(ctx context.Context, resourceName string, person
 // DeleteContact deletes a contact
 func (s *Service) DeleteContact(ctx context.Context, resourceName string) error {
 	err := retry.WithRetry(func() error {
-		_, err := s.svc.People.DeleteContact(resourceName).Context(ctx).Do()
-		return err
+		_, callErr := s.svc.People.DeleteContact(resourceName).Context(ctx).Do()
+		return callErr
 	}, 3, time.Second)
 
 	if err != nil {
