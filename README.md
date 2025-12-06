@@ -95,11 +95,17 @@ go build ./cmd/gsuite-mcp
 ### Run
 
 ```bash
-# Production mode (requires credentials.json)
-./gsuite-mcp
+# Show help
+./gsuite-mcp help
 
-# Testing mode (requires ish mock server)
-ISH_MODE=true ISH_BASE_URL=http://localhost:9000 ./gsuite-mcp
+# Start the MCP server (production mode, requires credentials.json)
+./gsuite-mcp mcp
+
+# Start in testing mode (requires ish mock server)
+ISH_MODE=true ISH_BASE_URL=http://localhost:9000 ./gsuite-mcp mcp
+
+# Show version
+./gsuite-mcp version
 ```
 
 ### Configure MCP Client
@@ -111,8 +117,7 @@ Add to your MCP client configuration (e.g., Claude Desktop):
   "mcpServers": {
     "gsuite": {
       "command": "/path/to/gsuite-mcp",
-      "args": [],
-      "env": {}
+      "args": ["mcp"]
     }
   }
 }
