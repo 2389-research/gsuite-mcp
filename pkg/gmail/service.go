@@ -89,6 +89,7 @@ func (s *Service) GetMessage(ctx context.Context, messageID string) (*gmail.Mess
 
 // ThreadingHeaders contains headers needed for proper email threading
 type ThreadingHeaders struct {
+	ThreadId   string // Original message's thread ID (required for Gmail API)
 	MessageID  string // Original message's Message-ID header
 	References string // References header (chain of message IDs)
 	Subject    string // Original subject
@@ -114,7 +115,9 @@ func (s *Service) GetMessageHeaders(ctx context.Context, messageID string) (*Thr
 		return nil, fmt.Errorf("unable to get message headers: %w", err)
 	}
 
-	headers := &ThreadingHeaders{}
+	headers := &ThreadingHeaders{
+		ThreadId: msg.ThreadId, // Capture thread ID from message object
+	}
 	if msg.Payload != nil {
 		for _, h := range msg.Payload.Headers {
 			switch strings.ToLower(h.Name) {
@@ -143,7 +146,7 @@ func (s *Service) SendMessage(ctx context.Context, to, subject, body, inReplyTo 
 		return nil, fmt.Errorf("subject cannot be empty")
 	}
 
-	var inReplyToHeader, referencesHeader string
+	var inReplyToHeader, referencesHeader, threadId string
 
 	// If replying, fetch original message headers for threading
 	if inReplyTo != "" {
@@ -151,6 +154,8 @@ func (s *Service) SendMessage(ctx context.Context, to, subject, body, inReplyTo 
 		if err != nil {
 			return nil, fmt.Errorf("unable to fetch original message for send reply: %w", err)
 		}
+		// Capture thread ID for Gmail API
+		threadId = headers.ThreadId
 		// Only set threading headers if the original message has a Message-ID
 		if headers.MessageID != "" {
 			inReplyToHeader = headers.MessageID
@@ -170,7 +175,8 @@ func (s *Service) SendMessage(ctx context.Context, to, subject, body, inReplyTo 
 	encoded := base64.URLEncoding.EncodeToString([]byte(message))
 
 	msg := &gmail.Message{
-		Raw: encoded,
+		Raw:      encoded,
+		ThreadId: threadId, // Set thread ID for proper threading
 	}
 
 	var sent *gmail.Message
@@ -271,7 +277,7 @@ func (s *Service) CreateDraft(ctx context.Context, to, subject, body, inReplyTo 
 		return nil, fmt.Errorf("subject cannot be empty")
 	}
 
-	var inReplyToHeader, referencesHeader string
+	var inReplyToHeader, referencesHeader, threadId string
 
 	// If replying, fetch original message headers for threading
 	if inReplyTo != "" {
@@ -279,6 +285,8 @@ func (s *Service) CreateDraft(ctx context.Context, to, subject, body, inReplyTo 
 		if err != nil {
 			return nil, fmt.Errorf("unable to fetch original message for draft reply: %w", err)
 		}
+		// Capture thread ID for Gmail API
+		threadId = headers.ThreadId
 		// Only set threading headers if the original message has a Message-ID
 		if headers.MessageID != "" {
 			inReplyToHeader = headers.MessageID
@@ -299,7 +307,8 @@ func (s *Service) CreateDraft(ctx context.Context, to, subject, body, inReplyTo 
 
 	draft := &gmail.Draft{
 		Message: &gmail.Message{
-			Raw: encoded,
+			Raw:      encoded,
+			ThreadId: threadId, // Set thread ID for proper threading
 		},
 	}
 
