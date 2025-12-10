@@ -118,13 +118,14 @@ func (s *Server) registerTools() {
 
 	s.mcp.AddTool(mcp.Tool{
 		Name:        "gmail_send_message",
-		Description: "Send an email",
+		Description: "Send an email. Use in_reply_to to reply to an existing message (auto-fetches threading headers).",
 		InputSchema: mcp.ToolInputSchema{
 			Type: "object",
 			Properties: map[string]interface{}{
-				"to":      map[string]string{"type": "string"},
-				"subject": map[string]string{"type": "string"},
-				"body":    map[string]string{"type": "string"},
+				"to":          map[string]string{"type": "string", "description": "Recipient email address"},
+				"subject":     map[string]string{"type": "string", "description": "Email subject (auto-prefixed with Re: for replies)"},
+				"body":        map[string]string{"type": "string", "description": "Email body content"},
+				"in_reply_to": map[string]string{"type": "string", "description": "Message ID to reply to (auto-fetches threading headers)"},
 			},
 			Required: []string{"to", "subject", "body"},
 		},
@@ -132,13 +133,14 @@ func (s *Server) registerTools() {
 
 	s.mcp.AddTool(mcp.Tool{
 		Name:        "gmail_create_draft",
-		Description: "Create a draft email",
+		Description: "Create a draft email. Use in_reply_to to create a reply draft (auto-fetches threading headers).",
 		InputSchema: mcp.ToolInputSchema{
 			Type: "object",
 			Properties: map[string]interface{}{
-				"to":      map[string]string{"type": "string"},
-				"subject": map[string]string{"type": "string"},
-				"body":    map[string]string{"type": "string"},
+				"to":          map[string]string{"type": "string", "description": "Recipient email address"},
+				"subject":     map[string]string{"type": "string", "description": "Email subject (auto-prefixed with Re: for replies)"},
+				"body":        map[string]string{"type": "string", "description": "Email body content"},
+				"in_reply_to": map[string]string{"type": "string", "description": "Message ID to reply to (auto-fetches threading headers)"},
 			},
 			Required: []string{"to", "subject", "body"},
 		},
@@ -483,7 +485,9 @@ func (s *Server) handleGmailSendMessage(ctx context.Context, request mcp.CallToo
 		return mcp.NewToolResultError(err.Error()), nil
 	}
 
-	msg, err := s.gmail.SendMessage(ctx, to, subject, body)
+	inReplyTo := request.GetString("in_reply_to", "")
+
+	msg, err := s.gmail.SendMessage(ctx, to, subject, body, inReplyTo)
 	if err != nil {
 		return mcp.NewToolResultError(err.Error()), nil
 	}
@@ -507,7 +511,9 @@ func (s *Server) handleGmailCreateDraft(ctx context.Context, request mcp.CallToo
 		return mcp.NewToolResultError(err.Error()), nil
 	}
 
-	draft, err := s.gmail.CreateDraft(ctx, to, subject, body)
+	inReplyTo := request.GetString("in_reply_to", "")
+
+	draft, err := s.gmail.CreateDraft(ctx, to, subject, body, inReplyTo)
 	if err != nil {
 		return mcp.NewToolResultError(err.Error()), nil
 	}

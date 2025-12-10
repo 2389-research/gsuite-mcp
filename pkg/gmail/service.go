@@ -87,8 +87,55 @@ func (s *Service) GetMessage(ctx context.Context, messageID string) (*gmail.Mess
 	return msg, nil
 }
 
+// ThreadingHeaders contains headers needed for proper email threading
+type ThreadingHeaders struct {
+	MessageID  string // Original message's Message-ID header
+	References string // References header (chain of message IDs)
+	Subject    string // Original subject
+	From       string // Original sender (for reply-to)
+}
+
+// GetMessageHeaders fetches a message and extracts threading headers
+func (s *Service) GetMessageHeaders(ctx context.Context, messageID string) (*ThreadingHeaders, error) {
+	var msg *gmail.Message
+
+	err := retry.WithRetry(func() error {
+		var err error
+		// Fetch with metadata format to get headers efficiently
+		msg, err = s.svc.Users.Messages.Get("me", messageID).
+			Context(ctx).
+			Format("metadata").
+			MetadataHeaders("Message-ID", "References", "Subject", "From").
+			Do()
+		return err
+	}, 3, time.Second)
+
+	if err != nil {
+		return nil, fmt.Errorf("unable to get message headers: %w", err)
+	}
+
+	headers := &ThreadingHeaders{}
+	if msg.Payload != nil {
+		for _, h := range msg.Payload.Headers {
+			switch strings.ToLower(h.Name) {
+			case "message-id":
+				headers.MessageID = h.Value
+			case "references":
+				headers.References = h.Value
+			case "subject":
+				headers.Subject = h.Value
+			case "from":
+				headers.From = h.Value
+			}
+		}
+	}
+
+	return headers, nil
+}
+
 // SendMessage sends an email with automatic HTML detection
-func (s *Service) SendMessage(ctx context.Context, to, subject, body string) (*gmail.Message, error) {
+// If inReplyTo is provided (a message ID), threading headers are auto-fetched
+func (s *Service) SendMessage(ctx context.Context, to, subject, body, inReplyTo string) (*gmail.Message, error) {
 	if to == "" {
 		return nil, fmt.Errorf("recipient address (to) cannot be empty")
 	}
@@ -96,11 +143,28 @@ func (s *Service) SendMessage(ctx context.Context, to, subject, body string) (*g
 		return nil, fmt.Errorf("subject cannot be empty")
 	}
 
+	var inReplyToHeader, referencesHeader string
+
+	// If replying, fetch original message headers for threading
+	if inReplyTo != "" {
+		headers, err := s.GetMessageHeaders(ctx, inReplyTo)
+		if err != nil {
+			return nil, fmt.Errorf("unable to fetch original message for send reply: %w", err)
+		}
+		// Only set threading headers if the original message has a Message-ID
+		if headers.MessageID != "" {
+			inReplyToHeader = headers.MessageID
+			referencesHeader = buildReferences(headers.MessageID, headers.References)
+		}
+		// Auto-prefix "Re: " if not already present
+		subject = ensureReplySubject(subject)
+	}
+
 	var message string
 	if isHTML(body) {
-		message = buildHTMLMessage(to, subject, body)
+		message = buildHTMLMessage(to, subject, body, inReplyToHeader, referencesHeader)
 	} else {
-		message = buildPlainTextMessage(to, subject, body)
+		message = buildPlainTextMessage(to, subject, body, inReplyToHeader, referencesHeader)
 	}
 
 	encoded := base64.URLEncoding.EncodeToString([]byte(message))
@@ -144,18 +208,62 @@ func sanitizeHeader(value string) string {
 	return value
 }
 
-func buildPlainTextMessage(to, subject, body string) string {
-	return fmt.Sprintf("To: %s\r\nSubject: %s\r\nContent-Type: text/plain; charset=\"UTF-8\"\r\nMIME-Version: 1.0\r\n\r\n%s",
-		sanitizeHeader(to), sanitizeHeader(subject), body)
+func buildPlainTextMessage(to, subject, body, inReplyTo, references string) string {
+	var headers strings.Builder
+	headers.WriteString(fmt.Sprintf("To: %s\r\n", sanitizeHeader(to)))
+	headers.WriteString(fmt.Sprintf("Subject: %s\r\n", sanitizeHeader(subject)))
+	if inReplyTo != "" {
+		headers.WriteString(fmt.Sprintf("In-Reply-To: %s\r\n", sanitizeHeader(inReplyTo)))
+	}
+	if references != "" {
+		headers.WriteString(fmt.Sprintf("References: %s\r\n", sanitizeHeader(references)))
+	}
+	headers.WriteString("Content-Type: text/plain; charset=\"UTF-8\"\r\n")
+	headers.WriteString("MIME-Version: 1.0\r\n")
+	headers.WriteString("\r\n")
+	headers.WriteString(body)
+	return headers.String()
 }
 
-func buildHTMLMessage(to, subject, body string) string {
-	return fmt.Sprintf("To: %s\r\nSubject: %s\r\nContent-Type: text/html; charset=\"UTF-8\"\r\nMIME-Version: 1.0\r\n\r\n%s",
-		sanitizeHeader(to), sanitizeHeader(subject), body)
+func buildHTMLMessage(to, subject, body, inReplyTo, references string) string {
+	var headers strings.Builder
+	headers.WriteString(fmt.Sprintf("To: %s\r\n", sanitizeHeader(to)))
+	headers.WriteString(fmt.Sprintf("Subject: %s\r\n", sanitizeHeader(subject)))
+	if inReplyTo != "" {
+		headers.WriteString(fmt.Sprintf("In-Reply-To: %s\r\n", sanitizeHeader(inReplyTo)))
+	}
+	if references != "" {
+		headers.WriteString(fmt.Sprintf("References: %s\r\n", sanitizeHeader(references)))
+	}
+	headers.WriteString("Content-Type: text/html; charset=\"UTF-8\"\r\n")
+	headers.WriteString("MIME-Version: 1.0\r\n")
+	headers.WriteString("\r\n")
+	headers.WriteString(body)
+	return headers.String()
+}
+
+// buildReferences constructs the References header for a reply
+func buildReferences(originalMessageID, originalReferences string) string {
+	if originalMessageID == "" {
+		return originalReferences
+	}
+	if originalReferences != "" {
+		return originalReferences + " " + originalMessageID
+	}
+	return originalMessageID
+}
+
+// ensureReplySubject adds "Re: " prefix if not already present
+func ensureReplySubject(subject string) string {
+	if strings.HasPrefix(strings.ToLower(subject), "re:") {
+		return subject
+	}
+	return "Re: " + subject
 }
 
 // CreateDraft creates a new draft email with automatic HTML detection
-func (s *Service) CreateDraft(ctx context.Context, to, subject, body string) (*gmail.Draft, error) {
+// If inReplyTo is provided (a message ID), threading headers are auto-fetched
+func (s *Service) CreateDraft(ctx context.Context, to, subject, body, inReplyTo string) (*gmail.Draft, error) {
 	if to == "" {
 		return nil, fmt.Errorf("recipient address (to) cannot be empty")
 	}
@@ -163,11 +271,28 @@ func (s *Service) CreateDraft(ctx context.Context, to, subject, body string) (*g
 		return nil, fmt.Errorf("subject cannot be empty")
 	}
 
+	var inReplyToHeader, referencesHeader string
+
+	// If replying, fetch original message headers for threading
+	if inReplyTo != "" {
+		headers, err := s.GetMessageHeaders(ctx, inReplyTo)
+		if err != nil {
+			return nil, fmt.Errorf("unable to fetch original message for draft reply: %w", err)
+		}
+		// Only set threading headers if the original message has a Message-ID
+		if headers.MessageID != "" {
+			inReplyToHeader = headers.MessageID
+			referencesHeader = buildReferences(headers.MessageID, headers.References)
+		}
+		// Auto-prefix "Re: " if not already present
+		subject = ensureReplySubject(subject)
+	}
+
 	var message string
 	if isHTML(body) {
-		message = buildHTMLMessage(to, subject, body)
+		message = buildHTMLMessage(to, subject, body, inReplyToHeader, referencesHeader)
 	} else {
-		message = buildPlainTextMessage(to, subject, body)
+		message = buildPlainTextMessage(to, subject, body, inReplyToHeader, referencesHeader)
 	}
 
 	encoded := base64.URLEncoding.EncodeToString([]byte(message))
@@ -279,4 +404,20 @@ func (s *Service) TrashMessage(ctx context.Context, messageID string) (*gmail.Me
 	}
 
 	return trashed, nil
+}
+
+// GetProfile returns the authenticated user's email profile
+func (s *Service) GetProfile(ctx context.Context) (*gmail.Profile, error) {
+	var profile *gmail.Profile
+	err := retry.WithRetry(func() error {
+		var err error
+		profile, err = s.svc.Users.GetProfile("me").Context(ctx).Do()
+		return err
+	}, 3, time.Second)
+
+	if err != nil {
+		return nil, fmt.Errorf("unable to get profile: %w", err)
+	}
+
+	return profile, nil
 }

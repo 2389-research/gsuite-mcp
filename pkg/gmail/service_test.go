@@ -67,13 +67,13 @@ func TestSendMessage_Validation(t *testing.T) {
 	ctx := context.Background()
 
 	t.Run("Empty recipient fails", func(t *testing.T) {
-		_, err := svc.SendMessage(ctx, "", "Subject", "Body")
+		_, err := svc.SendMessage(ctx, "", "Subject", "Body", "")
 		require.Error(t, err)
 		assert.Contains(t, err.Error(), "recipient address (to) cannot be empty")
 	})
 
 	t.Run("Empty subject fails", func(t *testing.T) {
-		_, err := svc.SendMessage(ctx, "test@example.com", "", "Body")
+		_, err := svc.SendMessage(ctx, "test@example.com", "", "Body", "")
 		require.Error(t, err)
 		assert.Contains(t, err.Error(), "subject cannot be empty")
 	})
@@ -90,13 +90,13 @@ func TestCreateDraft_Validation(t *testing.T) {
 	ctx := context.Background()
 
 	t.Run("Empty recipient fails", func(t *testing.T) {
-		_, err := svc.CreateDraft(ctx, "", "Subject", "Body")
+		_, err := svc.CreateDraft(ctx, "", "Subject", "Body", "")
 		require.Error(t, err)
 		assert.Contains(t, err.Error(), "recipient address (to) cannot be empty")
 	})
 
 	t.Run("Empty subject fails", func(t *testing.T) {
-		_, err := svc.CreateDraft(ctx, "test@example.com", "", "Body")
+		_, err := svc.CreateDraft(ctx, "test@example.com", "", "Body", "")
 		require.Error(t, err)
 		assert.Contains(t, err.Error(), "subject cannot be empty")
 	})
@@ -193,7 +193,7 @@ func TestBuildPlainTextMessage(t *testing.T) {
 	subject := "Test Subject"
 	body := "This is a test body"
 
-	result := buildPlainTextMessage(to, subject, body)
+	result := buildPlainTextMessage(to, subject, body, "", "")
 
 	assert.Contains(t, result, "To: test@example.com")
 	assert.Contains(t, result, "Subject: Test Subject")
@@ -207,7 +207,7 @@ func TestBuildHTMLMessage(t *testing.T) {
 	subject := "Test Subject"
 	body := "<html><body><h1>Hello</h1></body></html>"
 
-	result := buildHTMLMessage(to, subject, body)
+	result := buildHTMLMessage(to, subject, body, "", "")
 
 	assert.Contains(t, result, "To: test@example.com")
 	assert.Contains(t, result, "Subject: Test Subject")
@@ -255,4 +255,154 @@ func TestSanitizeHeader(t *testing.T) {
 			assert.Equal(t, tt.expected, result)
 		})
 	}
+}
+
+func TestBuildReferences(t *testing.T) {
+	tests := []struct {
+		name               string
+		originalMessageID  string
+		originalReferences string
+		expected           string
+	}{
+		{
+			name:               "No existing references",
+			originalMessageID:  "<abc123@example.com>",
+			originalReferences: "",
+			expected:           "<abc123@example.com>",
+		},
+		{
+			name:               "With existing references",
+			originalMessageID:  "<def456@example.com>",
+			originalReferences: "<abc123@example.com>",
+			expected:           "<abc123@example.com> <def456@example.com>",
+		},
+		{
+			name:               "Multiple existing references",
+			originalMessageID:  "<ghi789@example.com>",
+			originalReferences: "<abc123@example.com> <def456@example.com>",
+			expected:           "<abc123@example.com> <def456@example.com> <ghi789@example.com>",
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			result := buildReferences(tt.originalMessageID, tt.originalReferences)
+			assert.Equal(t, tt.expected, result)
+		})
+	}
+}
+
+func TestEnsureReplySubject(t *testing.T) {
+	tests := []struct {
+		name     string
+		subject  string
+		expected string
+	}{
+		{
+			name:     "Subject without Re prefix",
+			subject:  "Hello World",
+			expected: "Re: Hello World",
+		},
+		{
+			name:     "Subject already has Re prefix",
+			subject:  "Re: Hello World",
+			expected: "Re: Hello World",
+		},
+		{
+			name:     "Subject with lowercase re prefix",
+			subject:  "re: Hello World",
+			expected: "re: Hello World",
+		},
+		{
+			name:     "Subject with mixed case RE prefix",
+			subject:  "RE: Hello World",
+			expected: "RE: Hello World",
+		},
+		{
+			name:     "Empty subject",
+			subject:  "",
+			expected: "Re: ",
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			result := ensureReplySubject(tt.subject)
+			assert.Equal(t, tt.expected, result)
+		})
+	}
+}
+
+func TestBuildPlainTextMessage_WithThreading(t *testing.T) {
+	to := "test@example.com"
+	subject := "Test Subject"
+	body := "Test body"
+	inReplyTo := "<original123@example.com>"
+	references := "<ref1@example.com> <original123@example.com>"
+
+	result := buildPlainTextMessage(to, subject, body, inReplyTo, references)
+
+	assert.Contains(t, result, "To: test@example.com")
+	assert.Contains(t, result, "Subject: Test Subject")
+	assert.Contains(t, result, "In-Reply-To: <original123@example.com>")
+	assert.Contains(t, result, "References: <ref1@example.com> <original123@example.com>")
+	assert.Contains(t, result, "Content-Type: text/plain; charset=\"UTF-8\"")
+	assert.Contains(t, result, "MIME-Version: 1.0")
+	assert.Contains(t, result, body)
+}
+
+func TestBuildHTMLMessage_WithThreading(t *testing.T) {
+	to := "test@example.com"
+	subject := "Test Subject"
+	body := "<html><body><h1>Hello</h1></body></html>"
+	inReplyTo := "<original123@example.com>"
+	references := "<ref1@example.com> <original123@example.com>"
+
+	result := buildHTMLMessage(to, subject, body, inReplyTo, references)
+
+	assert.Contains(t, result, "To: test@example.com")
+	assert.Contains(t, result, "Subject: Test Subject")
+	assert.Contains(t, result, "In-Reply-To: <original123@example.com>")
+	assert.Contains(t, result, "References: <ref1@example.com> <original123@example.com>")
+	assert.Contains(t, result, "Content-Type: text/html; charset=\"UTF-8\"")
+	assert.Contains(t, result, "MIME-Version: 1.0")
+	assert.Contains(t, result, body)
+}
+
+func TestBuildPlainTextMessage_WithoutThreading(t *testing.T) {
+	to := "test@example.com"
+	subject := "Test Subject"
+	body := "Test body"
+
+	result := buildPlainTextMessage(to, subject, body, "", "")
+
+	assert.Contains(t, result, "To: test@example.com")
+	assert.Contains(t, result, "Subject: Test Subject")
+	assert.NotContains(t, result, "In-Reply-To:")
+	assert.NotContains(t, result, "References:")
+	assert.Contains(t, result, body)
+}
+
+func TestBuildReferences_EmptyMessageID(t *testing.T) {
+	// When Message-ID is empty, buildReferences should return empty string
+	result := buildReferences("", "")
+	assert.Equal(t, "", result)
+
+	// When Message-ID is empty but references exist, return just the existing references
+	result = buildReferences("", "<existing@example.com>")
+	assert.Equal(t, "<existing@example.com>", result)
+}
+
+func TestBuildPlainTextMessage_EmptyThreadingHeaders(t *testing.T) {
+	// Verify that empty threading headers don't add empty header lines
+	to := "test@example.com"
+	subject := "Test Subject"
+	body := "Test body"
+
+	result := buildPlainTextMessage(to, subject, body, "", "")
+
+	// Should NOT contain "In-Reply-To:" when inReplyTo is empty
+	assert.NotContains(t, result, "In-Reply-To:")
+	// Should NOT contain "References:" when references is empty
+	assert.NotContains(t, result, "References:")
 }

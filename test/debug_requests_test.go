@@ -73,7 +73,7 @@ func TestDebugRequests(t *testing.T) {
 		svc, err := gmail.NewService(ctx, client)
 		require.NoError(t, err)
 
-		_, _ = svc.SendMessage(ctx, "test@example.com", "Subject", "Body")
+		_, _ = svc.SendMessage(ctx, "test@example.com", "Subject", "Body", "")
 	})
 
 	t.Run("Calendar ListEvents", func(t *testing.T) {

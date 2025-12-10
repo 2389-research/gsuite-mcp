@@ -10,6 +10,7 @@ import (
 	"fmt"
 	"net/http"
 	"os"
+	"path/filepath"
 	"strings"
 
 	"golang.org/x/oauth2"
@@ -97,20 +98,58 @@ func (a *Authenticator) loadToken() (token *oauth2.Token, err error) {
 	return token, err
 }
 
-// saveToken saves a token to disk
-func (a *Authenticator) saveToken(token *oauth2.Token) (err error) {
-	f, err := os.Create(a.tokenPath)
-	if err != nil {
-		return err
+// saveToken saves a token to disk using atomic write (write to temp, then rename).
+// This prevents partial writes and race conditions.
+func (a *Authenticator) saveToken(token *oauth2.Token) error {
+	if err := EnsureDir(a.tokenPath); err != nil {
+		return fmt.Errorf("failed to create token directory: %w", err)
 	}
+
+	// Write to temp file first for atomic operation
+	dir := filepath.Dir(a.tokenPath)
+	tmpFile, err := os.CreateTemp(dir, ".token-*.tmp")
+	if err != nil {
+		// Retry once if directory was removed between EnsureDir and CreateTemp (TOCTOU)
+		if err := EnsureDir(a.tokenPath); err != nil {
+			return fmt.Errorf("failed to create token directory: %w", err)
+		}
+		tmpFile, err = os.CreateTemp(dir, ".token-*.tmp")
+		if err != nil {
+			return fmt.Errorf("failed to create temp file: %w", err)
+		}
+	}
+	tmpPath := tmpFile.Name()
+
+	// Clean up temp file on any error
+	success := false
 	defer func() {
-		if cerr := f.Close(); cerr != nil && err == nil {
-			err = cerr
+		if !success {
+			_ = os.Remove(tmpPath)
 		}
 	}()
 
-	err = json.NewEncoder(f).Encode(token)
-	return err
+	// Set restrictive permissions before writing sensitive data
+	if err := tmpFile.Chmod(0600); err != nil {
+		_ = tmpFile.Close()
+		return fmt.Errorf("failed to set temp file permissions: %w", err)
+	}
+
+	if err := json.NewEncoder(tmpFile).Encode(token); err != nil {
+		_ = tmpFile.Close()
+		return fmt.Errorf("failed to encode token: %w", err)
+	}
+
+	if err := tmpFile.Close(); err != nil {
+		return fmt.Errorf("failed to close temp file: %w", err)
+	}
+
+	// Atomic rename
+	if err := os.Rename(tmpPath, a.tokenPath); err != nil {
+		return fmt.Errorf("failed to rename temp file: %w", err)
+	}
+
+	success = true
+	return nil
 }
 
 // authenticate performs the OAuth flow to get a new token

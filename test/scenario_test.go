@@ -54,7 +54,8 @@ func TestScenario_EmailTriage(t *testing.T) {
 		msg, err := gmailSvc.SendMessage(ctx,
 			"customer@example.com",
 			"Re: Your inquiry",
-			"Thank you for reaching out. We'll get back to you soon.")
+			"Thank you for reaching out. We'll get back to you soon.",
+			"")
 
 		if err != nil {
 			t.Logf("Send reply failed: %v", err)
@@ -232,7 +233,8 @@ func TestScenario_FullDayWorkflow(t *testing.T) {
 		msg, err := gmailSvc.SendMessage(ctx,
 			"boss@example.com",
 			"Re: Urgent: Project status",
-			"The project is on track. Will send detailed update by EOD.")
+			"The project is on track. Will send detailed update by EOD.",
+			"")
 
 		if err != nil {
 			t.Logf("Send response: %v", err)

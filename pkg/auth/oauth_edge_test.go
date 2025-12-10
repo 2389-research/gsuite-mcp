@@ -120,6 +120,12 @@ func TestSaveToken_ValidToken(t *testing.T) {
 	assert.NoError(t, err)
 	assert.Equal(t, token.AccessToken, loadedToken.AccessToken)
 	assert.Equal(t, token.RefreshToken, loadedToken.RefreshToken)
+
+	// Verify file has restrictive permissions (0600)
+	info, err := os.Stat(tokenPath)
+	require.NoError(t, err)
+	perm := info.Mode().Perm()
+	assert.Equal(t, os.FileMode(0600), perm, "token file should have 0600 permissions")
 }
 
 func TestSaveToken_ReadOnlyDirectory(t *testing.T) {

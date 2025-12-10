@@ -88,7 +88,7 @@ func TestGmailOperationsIntegration(t *testing.T) {
 	})
 
 	t.Run("SendMessage", func(t *testing.T) {
-		msg, err := svc.SendMessage(ctx, "recipient@example.com", "Test Subject", "Test Body")
+		msg, err := svc.SendMessage(ctx, "recipient@example.com", "Test Subject", "Test Body", "")
 		if err != nil {
 			t.Logf("Note: Send message failed (expected without ish server): %v", err)
 			return
