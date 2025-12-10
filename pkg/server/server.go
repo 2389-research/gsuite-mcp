@@ -39,7 +39,7 @@ func NewServer(ctx context.Context) (*Server, error) {
 		client = auth.NewFakeClient("")
 	} else {
 		// Use real OAuth
-		authenticator, err := auth.NewAuthenticator("credentials.json", "token.json")
+		authenticator, err := auth.NewAuthenticator(auth.GetCredentialsPath(), auth.GetTokenPath())
 		if err != nil {
 			return nil, err
 		}
@@ -94,8 +94,12 @@ func (s *Server) registerTools() {
 		InputSchema: mcp.ToolInputSchema{
 			Type: "object",
 			Properties: map[string]interface{}{
-				"query":       map[string]string{"type": "string"},
-				"max_results": map[string]string{"type": "integer"},
+				"query":       map[string]string{"type": "string", "description": "Gmail search query (e.g., 'from:me is:unread')"},
+				"max_results": map[string]string{"type": "integer", "description": "Maximum number of messages to return (default: 100)"},
+				"hydrate": map[string]interface{}{
+					"type":        "boolean",
+					"description": "When true, fetches full message details (from, subject, snippet, date). When false/omitted, returns only message IDs.",
+				},
 			},
 		},
 	}, s.handleGmailListMessages)
@@ -348,17 +352,105 @@ func (s *Server) registerTools() {
 	}, s.handlePeopleDeleteContact)
 }
 
+// HydratedMessage is a summary of a Gmail message with common fields extracted
+type HydratedMessage struct {
+	ID       string   `json:"id"`
+	ThreadID string   `json:"threadId"`
+	From     string   `json:"from,omitempty"`
+	To       string   `json:"to,omitempty"`
+	Subject  string   `json:"subject,omitempty"`
+	Snippet  string   `json:"snippet,omitempty"`
+	Date     string   `json:"date,omitempty"`
+	LabelIDs []string `json:"labelIds,omitempty"`
+}
+
+// ListMessagesResponse wraps message list results for MCP structuredContent
+type ListMessagesResponse struct {
+	Messages []HydratedMessage `json:"messages"`
+	Count    int               `json:"count"`
+}
+
+// ListEventsResponse wraps calendar event list results for MCP structuredContent
+type ListEventsResponse struct {
+	Events any `json:"events"`
+	Count  int `json:"count"`
+}
+
+// ListContactsResponse wraps contact list results for MCP structuredContent
+type ListContactsResponse struct {
+	Contacts any `json:"contacts"`
+	Count    int `json:"count"`
+}
+
 // Tool handlers
 func (s *Server) handleGmailListMessages(ctx context.Context, request mcp.CallToolRequest) (*mcp.CallToolResult, error) {
 	query := request.GetString("query", "")
 	maxResults := int64(request.GetInt("max_results", 100))
+	hydrate := request.GetBool("hydrate", false)
 
 	messages, err := s.gmail.ListMessages(ctx, query, maxResults)
 	if err != nil {
 		return mcp.NewToolResultError(err.Error()), nil
 	}
 
-	return mcp.NewToolResultJSON(messages)
+	if !hydrate {
+		// Wrap in object for MCP structuredContent compatibility
+		result := make([]HydratedMessage, len(messages))
+		for i, msg := range messages {
+			result[i] = HydratedMessage{
+				ID:       msg.Id,
+				ThreadID: msg.ThreadId,
+			}
+		}
+		return mcp.NewToolResultJSON(ListMessagesResponse{
+			Messages: result,
+			Count:    len(result),
+		})
+	}
+
+	// Hydrate: fetch full details for each message
+	hydrated := make([]HydratedMessage, 0, len(messages))
+	for _, msg := range messages {
+		fullMsg, err := s.gmail.GetMessage(ctx, msg.Id)
+		if err != nil {
+			// If we can't get one message, include basic info and continue
+			hydrated = append(hydrated, HydratedMessage{
+				ID:       msg.Id,
+				ThreadID: msg.ThreadId,
+			})
+			continue
+		}
+
+		hm := HydratedMessage{
+			ID:       fullMsg.Id,
+			ThreadID: fullMsg.ThreadId,
+			Snippet:  fullMsg.Snippet,
+			LabelIDs: fullMsg.LabelIds,
+		}
+
+		// Extract headers
+		if fullMsg.Payload != nil {
+			for _, header := range fullMsg.Payload.Headers {
+				switch strings.ToLower(header.Name) {
+				case "from":
+					hm.From = header.Value
+				case "to":
+					hm.To = header.Value
+				case "subject":
+					hm.Subject = header.Value
+				case "date":
+					hm.Date = header.Value
+				}
+			}
+		}
+
+		hydrated = append(hydrated, hm)
+	}
+
+	return mcp.NewToolResultJSON(ListMessagesResponse{
+		Messages: hydrated,
+		Count:    len(hydrated),
+	})
 }
 
 func (s *Server) handleGmailGetMessage(ctx context.Context, request mcp.CallToolRequest) (*mcp.CallToolResult, error) {
@@ -536,7 +628,10 @@ func (s *Server) handleCalendarListEvents(ctx context.Context, request mcp.CallT
 		return mcp.NewToolResultError(err.Error()), nil
 	}
 
-	return mcp.NewToolResultJSON(events)
+	return mcp.NewToolResultJSON(ListEventsResponse{
+		Events: events,
+		Count:  len(events),
+	})
 }
 
 func (s *Server) handleCalendarGetEvent(ctx context.Context, request mcp.CallToolRequest) (*mcp.CallToolResult, error) {
@@ -662,7 +757,10 @@ func (s *Server) handlePeopleListContacts(ctx context.Context, request mcp.CallT
 		return mcp.NewToolResultError(err.Error()), nil
 	}
 
-	return mcp.NewToolResultJSON(contacts)
+	return mcp.NewToolResultJSON(ListContactsResponse{
+		Contacts: contacts,
+		Count:    len(contacts),
+	})
 }
 
 func (s *Server) handlePeopleSearchContacts(ctx context.Context, request mcp.CallToolRequest) (*mcp.CallToolResult, error) {
@@ -678,7 +776,10 @@ func (s *Server) handlePeopleSearchContacts(ctx context.Context, request mcp.Cal
 		return mcp.NewToolResultError(err.Error()), nil
 	}
 
-	return mcp.NewToolResultJSON(contacts)
+	return mcp.NewToolResultJSON(ListContactsResponse{
+		Contacts: contacts,
+		Count:    len(contacts),
+	})
 }
 
 func (s *Server) handlePeopleGetContact(ctx context.Context, request mcp.CallToolRequest) (*mcp.CallToolResult, error) {

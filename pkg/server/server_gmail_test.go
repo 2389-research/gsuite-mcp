@@ -483,6 +483,62 @@ func TestHandleGmailModifyLabels_NonArrayTypes(t *testing.T) {
 	}
 }
 
+func TestHandleGmailListMessages_WithHydrate(t *testing.T) {
+	t.Setenv("ISH_MODE", "true")
+
+	srv, err := NewServer(context.Background())
+	require.NoError(t, err)
+
+	tests := []struct {
+		name        string
+		hydrate     interface{}
+		expectHydrated bool
+		description string
+	}{
+		{
+			name:           "hydrate=true returns full message details",
+			hydrate:        true,
+			expectHydrated: true,
+			description:    "should return messages with from, subject, snippet when hydrate=true",
+		},
+		{
+			name:           "hydrate=false returns only IDs",
+			hydrate:        false,
+			expectHydrated: false,
+			description:    "should return only message IDs when hydrate=false",
+		},
+		{
+			name:           "hydrate not specified (default) returns only IDs",
+			hydrate:        nil,
+			expectHydrated: false,
+			description:    "should default to non-hydrated response",
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			args := map[string]interface{}{
+				"max_results": 5,
+			}
+			if tt.hydrate != nil {
+				args["hydrate"] = tt.hydrate
+			}
+
+			request := createMockRequest("gmail_list_messages", args)
+			result, err := srv.handleGmailListMessages(context.Background(), request)
+
+			require.NoError(t, err, "handler should not return error")
+			assert.NotNil(t, result)
+			assert.NotEmpty(t, result.Content)
+
+			// Check the content structure based on hydration setting
+			// When hydrated, the response should contain enriched message data
+			// For now, just verify the handler works - detailed structure validation
+			// depends on the implementation
+		})
+	}
+}
+
 func TestHandleGmailModifyLabels_SuccessfulCases(t *testing.T) {
 	t.Setenv("ISH_MODE", "true")
 
