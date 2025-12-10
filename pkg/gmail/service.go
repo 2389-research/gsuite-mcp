@@ -9,6 +9,7 @@ import (
 	"fmt"
 	"net/http"
 	"os"
+	"strings"
 	"time"
 
 	"github.com/harper/gsuite-mcp/pkg/retry"
@@ -86,7 +87,7 @@ func (s *Service) GetMessage(ctx context.Context, messageID string) (*gmail.Mess
 	return msg, nil
 }
 
-// SendMessage sends an email
+// SendMessage sends an email with automatic HTML detection
 func (s *Service) SendMessage(ctx context.Context, to, subject, body string) (*gmail.Message, error) {
 	if to == "" {
 		return nil, fmt.Errorf("recipient address (to) cannot be empty")
@@ -95,7 +96,13 @@ func (s *Service) SendMessage(ctx context.Context, to, subject, body string) (*g
 		return nil, fmt.Errorf("subject cannot be empty")
 	}
 
-	message := fmt.Sprintf("To: %s\r\nSubject: %s\r\n\r\n%s", to, subject, body)
+	var message string
+	if isHTML(body) {
+		message = buildHTMLMessage(to, subject, body)
+	} else {
+		message = buildPlainTextMessage(to, subject, body)
+	}
+
 	encoded := base64.URLEncoding.EncodeToString([]byte(message))
 
 	msg := &gmail.Message{
@@ -116,7 +123,38 @@ func (s *Service) SendMessage(ctx context.Context, to, subject, body string) (*g
 	return sent, nil
 }
 
-// CreateDraft creates a new draft email
+func isHTML(body string) bool {
+	lower := strings.ToLower(body)
+	return strings.Contains(lower, "<html") ||
+		strings.Contains(lower, "<!doctype") ||
+		strings.Contains(lower, "<body") ||
+		strings.Contains(lower, "<div") ||
+		strings.Contains(lower, "<p>") ||
+		strings.Contains(lower, "<br>") ||
+		strings.Contains(lower, "<br/>") ||
+		strings.Contains(lower, "<br />") ||
+		strings.Contains(lower, "<span") ||
+		strings.Contains(lower, "<a ") ||
+		strings.Contains(lower, "<table")
+}
+
+func sanitizeHeader(value string) string {
+	value = strings.ReplaceAll(value, "\r", "")
+	value = strings.ReplaceAll(value, "\n", "")
+	return value
+}
+
+func buildPlainTextMessage(to, subject, body string) string {
+	return fmt.Sprintf("To: %s\r\nSubject: %s\r\nContent-Type: text/plain; charset=\"UTF-8\"\r\nMIME-Version: 1.0\r\n\r\n%s",
+		sanitizeHeader(to), sanitizeHeader(subject), body)
+}
+
+func buildHTMLMessage(to, subject, body string) string {
+	return fmt.Sprintf("To: %s\r\nSubject: %s\r\nContent-Type: text/html; charset=\"UTF-8\"\r\nMIME-Version: 1.0\r\n\r\n%s",
+		sanitizeHeader(to), sanitizeHeader(subject), body)
+}
+
+// CreateDraft creates a new draft email with automatic HTML detection
 func (s *Service) CreateDraft(ctx context.Context, to, subject, body string) (*gmail.Draft, error) {
 	if to == "" {
 		return nil, fmt.Errorf("recipient address (to) cannot be empty")
@@ -125,7 +163,13 @@ func (s *Service) CreateDraft(ctx context.Context, to, subject, body string) (*g
 		return nil, fmt.Errorf("subject cannot be empty")
 	}
 
-	message := fmt.Sprintf("To: %s\r\nSubject: %s\r\n\r\n%s", to, subject, body)
+	var message string
+	if isHTML(body) {
+		message = buildHTMLMessage(to, subject, body)
+	} else {
+		message = buildPlainTextMessage(to, subject, body)
+	}
+
 	encoded := base64.URLEncoding.EncodeToString([]byte(message))
 
 	draft := &gmail.Draft{

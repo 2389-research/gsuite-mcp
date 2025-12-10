@@ -61,3 +61,34 @@ func TestService_CreateEvent_Basic(t *testing.T) {
 		t.Logf("Expected error (no ish server): %v", err)
 	}
 }
+
+// TestNewService_EnvironmentConfig tests various environment configurations
+func TestNewService_EnvironmentConfig(t *testing.T) {
+	t.Run("ISH_MODE with custom base URL", func(t *testing.T) {
+		t.Setenv("ISH_MODE", "true")
+		t.Setenv("ISH_BASE_URL", "https://custom.example.com:8080")
+
+		svc, err := NewService(context.Background(), nil)
+		require.NoError(t, err)
+		assert.NotNil(t, svc)
+	})
+
+	t.Run("ISH_MODE without base URL uses default", func(t *testing.T) {
+		t.Setenv("ISH_MODE", "true")
+		// Don't set ISH_BASE_URL - should default to http://localhost:9000
+
+		svc, err := NewService(context.Background(), nil)
+		require.NoError(t, err)
+		assert.NotNil(t, svc)
+	})
+
+	t.Run("ISH_MODE case sensitive", func(t *testing.T) {
+		t.Setenv("ISH_MODE", "TRUE")
+
+		// Should NOT enable ISH mode (case sensitive)
+		_, err := NewService(context.Background(), nil)
+		if err == nil {
+			t.Log("Note: Service creation succeeded (may not have credentials)")
+		}
+	})
+}

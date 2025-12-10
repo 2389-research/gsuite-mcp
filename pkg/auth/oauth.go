@@ -4,11 +4,13 @@
 package auth
 
 import (
+	"bufio"
 	"context"
 	"encoding/json"
 	"fmt"
 	"net/http"
 	"os"
+	"strings"
 
 	"golang.org/x/oauth2"
 	"golang.org/x/oauth2/google"
@@ -117,9 +119,16 @@ func (a *Authenticator) authenticate(ctx context.Context) (*oauth2.Token, error)
 	fmt.Printf("Go to the following link in your browser:\n%v\n", authURL)
 	fmt.Println("Enter authorization code: ")
 
-	var authCode string
-	if _, err := fmt.Scan(&authCode); err != nil {
-		return nil, fmt.Errorf("unable to read authorization code: %w", err)
+	scanner := bufio.NewScanner(os.Stdin)
+	if !scanner.Scan() {
+		if err := scanner.Err(); err != nil {
+			return nil, fmt.Errorf("unable to read authorization code: %w", err)
+		}
+		return nil, fmt.Errorf("no authorization code provided")
+	}
+	authCode := strings.TrimSpace(scanner.Text())
+	if authCode == "" {
+		return nil, fmt.Errorf("authorization code cannot be empty")
 	}
 
 	token, err := a.config.Exchange(ctx, authCode)
