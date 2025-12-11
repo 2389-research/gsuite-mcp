@@ -240,6 +240,20 @@ func (s *Server) registerTools() {
 				"description": map[string]string{"type": "string", "description": "Event description"},
 				"start_time":  map[string]string{"type": "string", "description": "Start time in RFC3339 format"},
 				"end_time":    map[string]string{"type": "string", "description": "End time in RFC3339 format"},
+				"attendees": map[string]interface{}{
+					"type":        "array",
+					"items":       map[string]string{"type": "string"},
+					"description": "Email addresses of required attendees",
+				},
+				"optional_attendees": map[string]interface{}{
+					"type":        "array",
+					"items":       map[string]string{"type": "string"},
+					"description": "Email addresses of optional attendees",
+				},
+				"send_notifications": map[string]interface{}{
+					"type":        "boolean",
+					"description": "Send invite emails to attendees (default: true)",
+				},
 			},
 			Required: []string{"summary", "start_time", "end_time"},
 		},
