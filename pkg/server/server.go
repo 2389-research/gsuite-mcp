@@ -8,6 +8,7 @@ import (
 	"fmt"
 	"net/http"
 	"os"
+	"sort"
 	"strings"
 	"time"
 
@@ -801,24 +802,43 @@ func (s *Server) handleCalendarUpdateEvent(ctx context.Context, request mcp.Call
 
 	// Apply attendee updates
 	if hasFullReplacement {
-		// Full replacement mode - rebuild attendee list
-		var newAttendees []*googlecalendar.EventAttendee
+		// Full replacement mode - rebuild attendee list with deduplication
+		// Use map to deduplicate by email (case-insensitive)
+		// If same email in both lists, optional_attendees wins (processed second)
+		seen := make(map[string]*googlecalendar.EventAttendee)
 
 		// Add required attendees
 		for _, email := range attendees {
-			newAttendees = append(newAttendees, &googlecalendar.EventAttendee{
+			if email == "" {
+				continue
+			}
+			emailLower := strings.ToLower(email)
+			seen[emailLower] = &googlecalendar.EventAttendee{
 				Email:    email,
 				Optional: false,
-			})
+			}
 		}
 
-		// Add optional attendees
+		// Add optional attendees (overwrites if duplicate)
 		for _, email := range optionalAttendees {
-			newAttendees = append(newAttendees, &googlecalendar.EventAttendee{
+			if email == "" {
+				continue
+			}
+			emailLower := strings.ToLower(email)
+			seen[emailLower] = &googlecalendar.EventAttendee{
 				Email:    email,
 				Optional: true,
-			})
+			}
 		}
+
+		// Convert map to slice with deterministic order
+		newAttendees := make([]*googlecalendar.EventAttendee, 0, len(seen))
+		for _, att := range seen {
+			newAttendees = append(newAttendees, att)
+		}
+		sort.Slice(newAttendees, func(i, j int) bool {
+			return newAttendees[i].Email < newAttendees[j].Email
+		})
 
 		event.Attendees = newAttendees
 	} else if hasIncremental {
@@ -862,11 +882,14 @@ func (s *Server) handleCalendarUpdateEvent(ctx context.Context, request mcp.Call
 			delete(attendeeMap, emailLower)
 		}
 
-		// Convert map back to slice
-		var finalAttendees []*googlecalendar.EventAttendee
+		// Convert map back to slice with deterministic order
+		finalAttendees := make([]*googlecalendar.EventAttendee, 0, len(attendeeMap))
 		for _, att := range attendeeMap {
 			finalAttendees = append(finalAttendees, att)
 		}
+		sort.Slice(finalAttendees, func(i, j int) bool {
+			return finalAttendees[i].Email < finalAttendees[j].Email
+		})
 
 		event.Attendees = finalAttendees
 	}
