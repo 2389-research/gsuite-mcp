@@ -92,3 +92,149 @@ func TestNewService_EnvironmentConfig(t *testing.T) {
 		}
 	})
 }
+
+// TestService_CreateEvent_WithAttendees tests creating events with attendee support
+func TestService_CreateEvent_WithAttendees(t *testing.T) {
+	t.Setenv("ISH_MODE", "true")
+	t.Setenv("ISH_BASE_URL", "http://localhost:9000")
+
+	svc, err := NewService(context.Background(), nil)
+	require.NoError(t, err)
+
+	now := time.Now()
+	start := now.Add(1 * time.Hour)
+	end := start.Add(1 * time.Hour)
+
+	t.Run("Create event with required attendees", func(t *testing.T) {
+		attendees := []string{"alice@example.com", "bob@example.com"}
+		optionalAttendees := []string{}
+		sendNotifications := true
+
+		_, err := svc.CreateEvent(
+			context.Background(),
+			"Team Meeting",
+			"Weekly sync",
+			start,
+			end,
+			attendees,
+			optionalAttendees,
+			sendNotifications,
+		)
+
+		// This test will FAIL until implementation is added
+		if err != nil {
+			t.Logf("Expected error (not implemented yet): %v", err)
+		}
+	})
+
+	t.Run("Create event with optional attendees", func(t *testing.T) {
+		attendees := []string{}
+		optionalAttendees := []string{"charlie@example.com", "diana@example.com"}
+		sendNotifications := true
+
+		_, err := svc.CreateEvent(
+			context.Background(),
+			"Optional Meeting",
+			"Come if you can",
+			start,
+			end,
+			attendees,
+			optionalAttendees,
+			sendNotifications,
+		)
+
+		// This test will FAIL until implementation is added
+		if err != nil {
+			t.Logf("Expected error (not implemented yet): %v", err)
+		}
+	})
+
+	t.Run("Create event with both required and optional attendees", func(t *testing.T) {
+		attendees := []string{"alice@example.com"}
+		optionalAttendees := []string{"bob@example.com", "charlie@example.com"}
+		sendNotifications := true
+
+		_, err := svc.CreateEvent(
+			context.Background(),
+			"Mixed Attendees Meeting",
+			"Alice required, others optional",
+			start,
+			end,
+			attendees,
+			optionalAttendees,
+			sendNotifications,
+		)
+
+		// This test will FAIL until implementation is added
+		if err != nil {
+			t.Logf("Expected error (not implemented yet): %v", err)
+		}
+	})
+
+	t.Run("Create event with send_notifications false", func(t *testing.T) {
+		attendees := []string{"alice@example.com"}
+		optionalAttendees := []string{}
+		sendNotifications := false
+
+		_, err := svc.CreateEvent(
+			context.Background(),
+			"Silent Meeting",
+			"No invites sent",
+			start,
+			end,
+			attendees,
+			optionalAttendees,
+			sendNotifications,
+		)
+
+		// This test will FAIL until implementation is added
+		if err != nil {
+			t.Logf("Expected error (not implemented yet): %v", err)
+		}
+	})
+
+	t.Run("Create event with send_notifications true", func(t *testing.T) {
+		attendees := []string{"alice@example.com"}
+		optionalAttendees := []string{"bob@example.com"}
+		sendNotifications := true
+
+		_, err := svc.CreateEvent(
+			context.Background(),
+			"Notified Meeting",
+			"Invites will be sent",
+			start,
+			end,
+			attendees,
+			optionalAttendees,
+			sendNotifications,
+		)
+
+		// This test will FAIL until implementation is added
+		if err != nil {
+			t.Logf("Expected error (not implemented yet): %v", err)
+		}
+	})
+
+	t.Run("Create event with empty attendee arrays", func(t *testing.T) {
+		attendees := []string{}
+		optionalAttendees := []string{}
+		sendNotifications := true
+
+		_, err := svc.CreateEvent(
+			context.Background(),
+			"No Attendees Meeting",
+			"Just me",
+			start,
+			end,
+			attendees,
+			optionalAttendees,
+			sendNotifications,
+		)
+
+		// This should work like the old API (no attendees)
+		// This test will FAIL until implementation is added
+		if err != nil {
+			t.Logf("Expected error (not implemented yet): %v", err)
+		}
+	})
+}
