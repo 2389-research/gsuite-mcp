@@ -78,7 +78,7 @@ func (s *Service) ListEvents(ctx context.Context, maxResults int64, timeMin, tim
 }
 
 // CreateEvent creates a new calendar event
-func (s *Service) CreateEvent(ctx context.Context, summary, description string, startTime, endTime time.Time) (*calendar.Event, error) {
+func (s *Service) CreateEvent(ctx context.Context, summary, description string, startTime, endTime time.Time, attendees []string, optionalAttendees []string, sendNotifications bool) (*calendar.Event, error) {
 	event := &calendar.Event{
 		Summary:     summary,
 		Description: description,
@@ -90,10 +90,37 @@ func (s *Service) CreateEvent(ctx context.Context, summary, description string, 
 		},
 	}
 
+	// Build attendee list
+	var eventAttendees []*calendar.EventAttendee
+
+	// Add required attendees
+	for _, email := range attendees {
+		eventAttendees = append(eventAttendees, &calendar.EventAttendee{
+			Email:    email,
+			Optional: false,
+		})
+	}
+
+	// Add optional attendees
+	for _, email := range optionalAttendees {
+		eventAttendees = append(eventAttendees, &calendar.EventAttendee{
+			Email:    email,
+			Optional: true,
+		})
+	}
+
+	// Only set attendees if we have any
+	if len(eventAttendees) > 0 {
+		event.Attendees = eventAttendees
+	}
+
 	var created *calendar.Event
 	err := retry.WithRetry(func() error {
 		var err error
-		created, err = s.svc.Events.Insert("primary", event).Context(ctx).Do()
+		created, err = s.svc.Events.Insert("primary", event).
+			Context(ctx).
+			SendNotifications(sendNotifications).
+			Do()
 		return err
 	}, 3, time.Second)
 

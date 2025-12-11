@@ -100,7 +100,10 @@ func TestScenario_MeetingScheduling(t *testing.T) {
 			"Team Sync",
 			"Weekly team synchronization meeting",
 			meetingStart,
-			meetingEnd)
+			meetingEnd,
+			[]string{},
+			[]string{},
+			false)
 
 		if err != nil {
 			t.Logf("Schedule meeting failed: %v", err)
@@ -253,7 +256,10 @@ func TestScenario_FullDayWorkflow(t *testing.T) {
 			"Follow-up: Project Discussion",
 			"Discuss project status and next steps",
 			meetingStart,
-			meetingEnd)
+			meetingEnd,
+			[]string{},
+			[]string{},
+			false)
 
 		if err != nil {
 			t.Logf("Schedule meeting: %v", err)

@@ -97,7 +97,7 @@ func TestDebugRequests(t *testing.T) {
 
 		start := time.Now().Add(24 * time.Hour)
 		end := start.Add(1 * time.Hour)
-		_, _ = svc.CreateEvent(ctx, "Meeting", "Description", start, end)
+		_, _ = svc.CreateEvent(ctx, "Meeting", "Description", start, end, []string{}, []string{}, false)
 	})
 
 	t.Run("People ListContacts", func(t *testing.T) {

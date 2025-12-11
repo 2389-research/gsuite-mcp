@@ -159,7 +159,7 @@ func TestCalendarOperationsIntegration(t *testing.T) {
 		startTime := now.Add(2 * time.Hour)
 		endTime := startTime.Add(1 * time.Hour)
 
-		event, err := svc.CreateEvent(ctx, "Integration Test Event", "Testing event creation", startTime, endTime)
+		event, err := svc.CreateEvent(ctx, "Integration Test Event", "Testing event creation", startTime, endTime, []string{}, []string{}, false)
 		if err != nil {
 			t.Logf("Note: Create event failed (expected without ish server): %v", err)
 			return

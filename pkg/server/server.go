@@ -682,7 +682,12 @@ func (s *Server) handleCalendarCreateEvent(ctx context.Context, request mcp.Call
 		return mcp.NewToolResultError(fmt.Sprintf("invalid end_time format: %v", err)), nil
 	}
 
-	event, err := s.calendar.CreateEvent(ctx, summary, description, startTime, endTime)
+	// Get optional attendee parameters
+	attendees := request.GetStringSlice("attendees", []string{})
+	optionalAttendees := request.GetStringSlice("optional_attendees", []string{})
+	sendNotifications := request.GetBool("send_notifications", true)
+
+	event, err := s.calendar.CreateEvent(ctx, summary, description, startTime, endTime, attendees, optionalAttendees, sendNotifications)
 	if err != nil {
 		return mcp.NewToolResultError(err.Error()), nil
 	}

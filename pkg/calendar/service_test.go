@@ -52,8 +52,8 @@ func TestService_CreateEvent_Basic(t *testing.T) {
 	start := now.Add(1 * time.Hour)
 	end := start.Add(1 * time.Hour)
 
-	// Test that the method signature is correct
-	_, err = svc.CreateEvent(context.Background(), "Test Event", "Test Description", start, end)
+	// Test that the method signature is correct (without attendees - backward compat)
+	_, err = svc.CreateEvent(context.Background(), "Test Event", "Test Description", start, end, []string{}, []string{}, false)
 
 	// We expect it to fail because there's no ish server running,
 	// but we're testing that the method exists and has the right signature

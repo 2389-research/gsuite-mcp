@@ -1,0 +1,12 @@
+{
+  "mcpServers": {
+    "gsuite": {
+      "type": "stdio",
+      "command": "gsuite-mcp",
+      "args": [
+        "mcp"
+      ],
+      "env": {}
+    }
+  }
+}
