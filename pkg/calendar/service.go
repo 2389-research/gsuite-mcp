@@ -148,12 +148,15 @@ func (s *Service) GetEvent(ctx context.Context, eventID string) (*calendar.Event
 }
 
 // UpdateEvent updates an existing event
-func (s *Service) UpdateEvent(ctx context.Context, eventID string, event *calendar.Event) (*calendar.Event, error) {
+func (s *Service) UpdateEvent(ctx context.Context, eventID string, event *calendar.Event, sendNotifications bool) (*calendar.Event, error) {
 	var updated *calendar.Event
 
 	err := retry.WithRetry(func() error {
 		var err error
-		updated, err = s.svc.Events.Update("primary", eventID, event).Context(ctx).Do()
+		updated, err = s.svc.Events.Update("primary", eventID, event).
+			Context(ctx).
+			SendNotifications(sendNotifications).
+			Do()
 		return err
 	}, 3, time.Second)
 

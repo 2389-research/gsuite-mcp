@@ -270,6 +270,35 @@ func (s *Server) registerTools() {
 				"description": map[string]string{"type": "string", "description": "New event description"},
 				"start_time":  map[string]string{"type": "string", "description": "New start time in RFC3339 format"},
 				"end_time":    map[string]string{"type": "string", "description": "New end time in RFC3339 format"},
+				"attendees": map[string]interface{}{
+					"type":        "array",
+					"items":       map[string]string{"type": "string"},
+					"description": "Full replacement - replaces ALL required attendees",
+				},
+				"optional_attendees": map[string]interface{}{
+					"type":        "array",
+					"items":       map[string]string{"type": "string"},
+					"description": "Full replacement - replaces ALL optional attendees",
+				},
+				"add_attendees": map[string]interface{}{
+					"type":        "array",
+					"items":       map[string]string{"type": "string"},
+					"description": "Incremental - add as required attendees",
+				},
+				"add_optional_attendees": map[string]interface{}{
+					"type":        "array",
+					"items":       map[string]string{"type": "string"},
+					"description": "Incremental - add as optional attendees",
+				},
+				"remove_attendees": map[string]interface{}{
+					"type":        "array",
+					"items":       map[string]string{"type": "string"},
+					"description": "Incremental - remove by email",
+				},
+				"send_notifications": map[string]interface{}{
+					"type":        "boolean",
+					"description": "Send update emails (default: true)",
+				},
 			},
 			Required: []string{"event_id"},
 		},
@@ -715,7 +744,23 @@ func (s *Server) handleCalendarUpdateEvent(ctx context.Context, request mcp.Call
 		return mcp.NewToolResultError(err.Error()), nil
 	}
 
-	// Get existing event first
+	// Validate attendee parameters before fetching event
+	attendees := request.GetStringSlice("attendees", nil)
+	optionalAttendees := request.GetStringSlice("optional_attendees", nil)
+	addAttendees := request.GetStringSlice("add_attendees", nil)
+	addOptionalAttendees := request.GetStringSlice("add_optional_attendees", nil)
+	removeAttendees := request.GetStringSlice("remove_attendees", nil)
+
+	// Detect which mode is being used
+	hasFullReplacement := attendees != nil || optionalAttendees != nil
+	hasIncremental := addAttendees != nil || addOptionalAttendees != nil || removeAttendees != nil
+
+	// Error if mixing modes
+	if hasFullReplacement && hasIncremental {
+		return mcp.NewToolResultError("cannot mix full replacement (attendees/optional_attendees) with incremental updates (add_attendees/add_optional_attendees/remove_attendees)"), nil
+	}
+
+	// Get existing event
 	event, err := s.calendar.GetEvent(ctx, eventID)
 	if err != nil {
 		return mcp.NewToolResultError(err.Error()), nil
@@ -752,7 +797,84 @@ func (s *Server) handleCalendarUpdateEvent(ctx context.Context, request mcp.Call
 		event.End.DateTime = endTime.Format(time.RFC3339)
 	}
 
-	updated, err := s.calendar.UpdateEvent(ctx, eventID, event)
+	// Handle attendee updates
+
+	// Apply attendee updates
+	if hasFullReplacement {
+		// Full replacement mode - rebuild attendee list
+		var newAttendees []*googlecalendar.EventAttendee
+
+		// Add required attendees
+		for _, email := range attendees {
+			newAttendees = append(newAttendees, &googlecalendar.EventAttendee{
+				Email:    email,
+				Optional: false,
+			})
+		}
+
+		// Add optional attendees
+		for _, email := range optionalAttendees {
+			newAttendees = append(newAttendees, &googlecalendar.EventAttendee{
+				Email:    email,
+				Optional: true,
+			})
+		}
+
+		event.Attendees = newAttendees
+	} else if hasIncremental {
+		// Incremental mode - modify existing attendee list
+		existingAttendees := event.Attendees
+		if existingAttendees == nil {
+			existingAttendees = []*googlecalendar.EventAttendee{}
+		}
+
+		// Build a map for quick lookup
+		attendeeMap := make(map[string]*googlecalendar.EventAttendee)
+		for _, att := range existingAttendees {
+			attendeeMap[strings.ToLower(att.Email)] = att
+		}
+
+		// Add required attendees
+		for _, email := range addAttendees {
+			emailLower := strings.ToLower(email)
+			if _, exists := attendeeMap[emailLower]; !exists {
+				attendeeMap[emailLower] = &googlecalendar.EventAttendee{
+					Email:    email,
+					Optional: false,
+				}
+			}
+		}
+
+		// Add optional attendees
+		for _, email := range addOptionalAttendees {
+			emailLower := strings.ToLower(email)
+			if _, exists := attendeeMap[emailLower]; !exists {
+				attendeeMap[emailLower] = &googlecalendar.EventAttendee{
+					Email:    email,
+					Optional: true,
+				}
+			}
+		}
+
+		// Remove attendees
+		for _, email := range removeAttendees {
+			emailLower := strings.ToLower(email)
+			delete(attendeeMap, emailLower)
+		}
+
+		// Convert map back to slice
+		var finalAttendees []*googlecalendar.EventAttendee
+		for _, att := range attendeeMap {
+			finalAttendees = append(finalAttendees, att)
+		}
+
+		event.Attendees = finalAttendees
+	}
+
+	// Get send_notifications parameter (defaults to true)
+	sendNotifications := request.GetBool("send_notifications", true)
+
+	updated, err := s.calendar.UpdateEvent(ctx, eventID, event, sendNotifications)
 	if err != nil {
 		return mcp.NewToolResultError(err.Error()), nil
 	}
