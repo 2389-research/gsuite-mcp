@@ -4,10 +4,12 @@
 package auth
 
 import (
+	"context"
 	"encoding/json"
 	"os"
 	"path/filepath"
 	"testing"
+	"time"
 
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
@@ -309,6 +311,228 @@ func TestSaveToken_OverwriteExisting(t *testing.T) {
 	err = json.Unmarshal(data, &loadedToken)
 	assert.NoError(t, err)
 	assert.Equal(t, "new-token", loadedToken.AccessToken)
+}
+
+// mockTokenSource is a test double that returns configurable tokens
+type mockTokenSource struct {
+	tokens []*oauth2.Token
+	index  int
+	err    error
+}
+
+func (m *mockTokenSource) Token() (*oauth2.Token, error) {
+	if m.err != nil {
+		return nil, m.err
+	}
+	if m.index >= len(m.tokens) {
+		return m.tokens[len(m.tokens)-1], nil
+	}
+	token := m.tokens[m.index]
+	m.index++
+	return token, nil
+}
+
+func TestPersistentTokenSource_PersistsOnRefresh(t *testing.T) {
+	tmpDir := t.TempDir()
+	tokenPath := filepath.Join(tmpDir, "token.json")
+
+	// Setup: mock source returns different tokens on successive calls
+	initialToken := &oauth2.Token{AccessToken: "initial-token", RefreshToken: "refresh"}
+	refreshedToken := &oauth2.Token{AccessToken: "refreshed-token", RefreshToken: "refresh"}
+
+	mock := &mockTokenSource{tokens: []*oauth2.Token{initialToken, refreshedToken}}
+
+	credPath := createValidCredentialsFile(t, tmpDir)
+	auth, err := NewAuthenticator(credPath, tokenPath)
+	require.NoError(t, err)
+
+	pts := NewPersistentTokenSource(mock, auth.saveToken)
+
+	// First call - should save initial token
+	token1, err := pts.Token()
+	require.NoError(t, err)
+	assert.Equal(t, "initial-token", token1.AccessToken)
+
+	// Verify token was persisted
+	data, err := os.ReadFile(tokenPath)
+	require.NoError(t, err)
+	var saved1 oauth2.Token
+	require.NoError(t, json.Unmarshal(data, &saved1))
+	assert.Equal(t, "initial-token", saved1.AccessToken)
+
+	// Second call - should save refreshed token
+	token2, err := pts.Token()
+	require.NoError(t, err)
+	assert.Equal(t, "refreshed-token", token2.AccessToken)
+
+	// Verify new token was persisted
+	data, err = os.ReadFile(tokenPath)
+	require.NoError(t, err)
+	var saved2 oauth2.Token
+	require.NoError(t, json.Unmarshal(data, &saved2))
+	assert.Equal(t, "refreshed-token", saved2.AccessToken)
+}
+
+func TestPersistentTokenSource_SkipsIdenticalToken(t *testing.T) {
+	tmpDir := t.TempDir()
+	tokenPath := filepath.Join(tmpDir, "token.json")
+
+	// Setup: mock source returns same token repeatedly
+	token := &oauth2.Token{AccessToken: "same-token", RefreshToken: "refresh"}
+	mock := &mockTokenSource{tokens: []*oauth2.Token{token, token, token}}
+
+	credPath := createValidCredentialsFile(t, tmpDir)
+	auth, err := NewAuthenticator(credPath, tokenPath)
+	require.NoError(t, err)
+
+	saveCount := 0
+	countingSave := func(t *oauth2.Token) error {
+		saveCount++
+		return auth.saveToken(t)
+	}
+
+	pts := NewPersistentTokenSource(mock, countingSave)
+
+	// Call Token() three times
+	for i := 0; i < 3; i++ {
+		_, err := pts.Token()
+		require.NoError(t, err)
+	}
+
+	// Should only save once (first time)
+	assert.Equal(t, 1, saveCount, "should only save on first call, not on identical tokens")
+}
+
+func TestPersistentTokenSource_ContinuesOnSaveError(t *testing.T) {
+	// Setup: mock source returns valid token, but save always fails
+	token := &oauth2.Token{AccessToken: "test-token", RefreshToken: "refresh"}
+	mock := &mockTokenSource{tokens: []*oauth2.Token{token}}
+
+	failingSave := func(t *oauth2.Token) error {
+		return os.ErrPermission
+	}
+
+	pts := NewPersistentTokenSource(mock, failingSave)
+
+	// Should still return the token even if save fails
+	result, err := pts.Token()
+	require.NoError(t, err)
+	assert.Equal(t, "test-token", result.AccessToken)
+}
+
+func TestPersistentTokenSource_PropagatesSourceError(t *testing.T) {
+	// Setup: mock source returns an error
+	mock := &mockTokenSource{err: os.ErrNotExist}
+
+	pts := NewPersistentTokenSource(mock, func(t *oauth2.Token) error { return nil })
+
+	// Should propagate the error from the underlying source
+	_, err := pts.Token()
+	assert.Error(t, err)
+	assert.True(t, os.IsNotExist(err))
+}
+
+func TestTokenInfo_WithValidToken(t *testing.T) {
+	tmpDir := t.TempDir()
+	tokenPath := filepath.Join(tmpDir, "token.json")
+	credPath := createValidCredentialsFile(t, tmpDir)
+
+	// Create a token file with expiry
+	expiry := time.Now().Add(1 * time.Hour)
+	token := &oauth2.Token{
+		AccessToken:  "ya29.test-access-token-here",
+		RefreshToken: "1//refresh-token",
+		Expiry:       expiry,
+		TokenType:    "Bearer",
+	}
+	data, err := json.Marshal(token)
+	require.NoError(t, err)
+	require.NoError(t, os.WriteFile(tokenPath, data, 0600))
+
+	auth, err := NewAuthenticator(credPath, tokenPath)
+	require.NoError(t, err)
+
+	info, err := auth.TokenInfo()
+	require.NoError(t, err)
+
+	assert.True(t, info.Valid)
+	assert.True(t, info.HasRefresh)
+	assert.Equal(t, "ya29...here", info.AccessToken) // Masked: first 4 + last 4
+	assert.NotContains(t, info.AccessToken, "test-access-token") // Full token hidden
+	assert.WithinDuration(t, expiry, info.Expiry, time.Second)
+	assert.True(t, info.ExpiresIn > 0)
+}
+
+func TestTokenInfo_MasksAccessToken(t *testing.T) {
+	tmpDir := t.TempDir()
+	tokenPath := filepath.Join(tmpDir, "token.json")
+	credPath := createValidCredentialsFile(t, tmpDir)
+
+	// Test various token formats
+	testCases := []struct {
+		token    string
+		expected string
+	}{
+		{"ya29.a0AfB_byC1234567890", "ya29...7890"},
+		{"short123", "short123"}, // 8 chars, no masking
+		{"abcdefghi", "abcd...fghi"}, // 9 chars, masked
+		{"ab", "ab"},
+	}
+
+	for _, tc := range testCases {
+		token := &oauth2.Token{AccessToken: tc.token, Expiry: time.Now().Add(time.Hour)}
+		data, _ := json.Marshal(token)
+		require.NoError(t, os.WriteFile(tokenPath, data, 0600))
+
+		auth, _ := NewAuthenticator(credPath, tokenPath)
+		info, err := auth.TokenInfo()
+		require.NoError(t, err)
+		assert.Equal(t, tc.expected, info.AccessToken, "masking failed for %s", tc.token)
+	}
+}
+
+func TestTokenInfo_NoTokenFile(t *testing.T) {
+	tmpDir := t.TempDir()
+	tokenPath := filepath.Join(tmpDir, "nonexistent.json")
+	credPath := createValidCredentialsFile(t, tmpDir)
+
+	auth, err := NewAuthenticator(credPath, tokenPath)
+	require.NoError(t, err)
+
+	info, err := auth.TokenInfo()
+	require.NoError(t, err)
+
+	assert.False(t, info.Valid)
+	assert.False(t, info.HasRefresh)
+	assert.Empty(t, info.AccessToken)
+}
+
+func TestAuthURL_ReturnsValidURL(t *testing.T) {
+	tmpDir := t.TempDir()
+	tokenPath := filepath.Join(tmpDir, "token.json")
+	credPath := createValidCredentialsFile(t, tmpDir)
+
+	auth, err := NewAuthenticator(credPath, tokenPath)
+	require.NoError(t, err)
+
+	url := auth.AuthURL()
+
+	assert.Contains(t, url, "https://accounts.google.com/o/oauth2/auth")
+	assert.Contains(t, url, "client_id=")
+	assert.Contains(t, url, "access_type=offline")
+}
+
+func TestExchangeCode_InvalidCode(t *testing.T) {
+	tmpDir := t.TempDir()
+	tokenPath := filepath.Join(tmpDir, "token.json")
+	credPath := createValidCredentialsFile(t, tmpDir)
+
+	auth, err := NewAuthenticator(credPath, tokenPath)
+	require.NoError(t, err)
+
+	// Invalid code should fail during exchange
+	err = auth.ExchangeCode(context.Background(), "invalid-code")
+	assert.Error(t, err)
 }
 
 // Helper function to create a valid OAuth credentials file for testing

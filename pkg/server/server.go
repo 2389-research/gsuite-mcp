@@ -29,18 +29,21 @@ type Server struct {
 	calendar *calendar.Service
 	people   *people.Service
 	mcp      *server.MCPServer
+	auth     *auth.Authenticator // For auth management tools
 }
 
 // NewServer creates a new MCP server
 func NewServer(ctx context.Context) (*Server, error) {
 	var client *http.Client
+	var authenticator *auth.Authenticator
 
 	// Check for ish mode
 	if os.Getenv("ISH_MODE") == "true" {
 		client = auth.NewFakeClient("")
 	} else {
 		// Use real OAuth
-		authenticator, err := auth.NewAuthenticator(auth.GetCredentialsPath(), auth.GetTokenPath())
+		var err error
+		authenticator, err = auth.NewAuthenticator(auth.GetCredentialsPath(), auth.GetTokenPath())
 		if err != nil {
 			return nil, err
 		}
@@ -70,6 +73,7 @@ func NewServer(ctx context.Context) (*Server, error) {
 		gmail:    gmailSvc,
 		calendar: calendarSvc,
 		people:   peopleSvc,
+		auth:     authenticator,
 	}
 
 	// Create MCP server
@@ -396,6 +400,60 @@ func (s *Server) registerTools() {
 			Required: []string{"resource_name"},
 		},
 	}, s.handlePeopleDeleteContact)
+
+	// Auth tools
+	s.mcp.AddTool(mcp.Tool{
+		Name:        "auth_status",
+		Description: "Check if OAuth authentication is valid by making a test API call",
+		InputSchema: mcp.ToolInputSchema{
+			Type:       "object",
+			Properties: map[string]interface{}{},
+		},
+	}, s.handleAuthStatus)
+
+	s.mcp.AddTool(mcp.Tool{
+		Name:        "auth_info",
+		Description: "Get OAuth token metadata (expiry, scopes) without making API calls",
+		InputSchema: mcp.ToolInputSchema{
+			Type:       "object",
+			Properties: map[string]interface{}{},
+		},
+	}, s.handleAuthInfo)
+
+	s.mcp.AddTool(mcp.Tool{
+		Name:        "auth_init",
+		Description: "Start OAuth authentication flow. Returns auth URL if needed, or current status if auth is valid (use force=true to always get URL)",
+		InputSchema: mcp.ToolInputSchema{
+			Type: "object",
+			Properties: map[string]interface{}{
+				"force": map[string]interface{}{
+					"type":        "boolean",
+					"description": "Force new auth flow even if current auth is valid",
+				},
+			},
+		},
+	}, s.handleAuthInit)
+
+	s.mcp.AddTool(mcp.Tool{
+		Name:        "auth_complete",
+		Description: "Complete OAuth flow by exchanging authorization code for tokens",
+		InputSchema: mcp.ToolInputSchema{
+			Type: "object",
+			Properties: map[string]interface{}{
+				"code": map[string]string{"type": "string", "description": "Authorization code from OAuth redirect"},
+			},
+			Required: []string{"code"},
+		},
+	}, s.handleAuthComplete)
+
+	s.mcp.AddTool(mcp.Tool{
+		Name:        "auth_revoke",
+		Description: "Delete cached OAuth token, forcing re-authentication on next API call",
+		InputSchema: mcp.ToolInputSchema{
+			Type:       "object",
+			Properties: map[string]interface{}{},
+		},
+	}, s.handleAuthRevoke)
 }
 
 // HydratedMessage is a summary of a Gmail message with common fields extracted
@@ -1085,6 +1143,209 @@ func (s *Server) handlePeopleDeleteContact(ctx context.Context, request mcp.Call
 	}
 
 	return mcp.NewToolResultText(fmt.Sprintf("Contact %s deleted successfully", resourceName)), nil
+}
+
+// Auth tool handlers
+
+// AuthStatusResponse is the response for auth_status tool
+type AuthStatusResponse struct {
+	Valid   bool   `json:"valid"`
+	Message string `json:"message"`
+}
+
+func (s *Server) handleAuthStatus(ctx context.Context, request mcp.CallToolRequest) (*mcp.CallToolResult, error) {
+	// In ISH mode, always return valid
+	if os.Getenv("ISH_MODE") == "true" {
+		return mcp.NewToolResultJSON(AuthStatusResponse{
+			Valid:   true,
+			Message: "ISH mode - auth is simulated",
+		})
+	}
+
+	// Try a lightweight API call to verify auth works
+	_, err := s.gmail.ListMessages(ctx, "", 1)
+	if err != nil {
+		return mcp.NewToolResultJSON(AuthStatusResponse{
+			Valid:   false,
+			Message: fmt.Sprintf("auth check failed: %v", err),
+		})
+	}
+
+	return mcp.NewToolResultJSON(AuthStatusResponse{
+		Valid:   true,
+		Message: "authentication is valid",
+	})
+}
+
+// AuthInfoResponse is the response for auth_info tool
+type AuthInfoResponse struct {
+	Valid       bool   `json:"valid"`
+	AccessToken string `json:"access_token,omitempty"`
+	Expiry      string `json:"expiry,omitempty"`
+	ExpiresIn   string `json:"expires_in,omitempty"`
+	HasRefresh  bool   `json:"has_refresh"`
+	Message     string `json:"message,omitempty"`
+}
+
+func (s *Server) handleAuthInfo(ctx context.Context, request mcp.CallToolRequest) (*mcp.CallToolResult, error) {
+	// In ISH mode, return fake info
+	if os.Getenv("ISH_MODE") == "true" {
+		return mcp.NewToolResultJSON(AuthInfoResponse{
+			Valid:      true,
+			HasRefresh: true,
+			Message:    "ISH mode - token info is simulated",
+		})
+	}
+
+	if s.auth == nil {
+		return mcp.NewToolResultJSON(AuthInfoResponse{
+			Valid:   false,
+			Message: "authenticator not initialized",
+		})
+	}
+
+	info, err := s.auth.TokenInfo()
+	if err != nil {
+		return mcp.NewToolResultJSON(AuthInfoResponse{
+			Valid:   false,
+			Message: fmt.Sprintf("failed to get token info: %v", err),
+		})
+	}
+
+	resp := AuthInfoResponse{
+		Valid:       info.Valid,
+		AccessToken: info.AccessToken,
+		HasRefresh:  info.HasRefresh,
+	}
+
+	if !info.Expiry.IsZero() {
+		resp.Expiry = info.Expiry.Format(time.RFC3339)
+		resp.ExpiresIn = info.ExpiresIn.Round(time.Second).String()
+	}
+
+	return mcp.NewToolResultJSON(resp)
+}
+
+// AuthInitResponse is the response for auth_init tool
+type AuthInitResponse struct {
+	Status  string `json:"status"`
+	AuthURL string `json:"auth_url,omitempty"`
+	Message string `json:"message"`
+}
+
+func (s *Server) handleAuthInit(ctx context.Context, request mcp.CallToolRequest) (*mcp.CallToolResult, error) {
+	// In ISH mode, return simulated response
+	if os.Getenv("ISH_MODE") == "true" {
+		return mcp.NewToolResultJSON(AuthInitResponse{
+			Status:  "valid",
+			Message: "ISH mode - auth is simulated, no action needed",
+		})
+	}
+
+	if s.auth == nil {
+		return mcp.NewToolResultJSON(AuthInitResponse{
+			Status:  "error",
+			Message: "authenticator not initialized",
+		})
+	}
+
+	force := request.GetBool("force", false)
+
+	// Check current auth status if not forcing
+	if !force {
+		info, err := s.auth.TokenInfo()
+		if err == nil && info.Valid {
+			return mcp.NewToolResultJSON(AuthInitResponse{
+				Status:  "valid",
+				Message: "current authentication is valid - use force=true to re-authenticate",
+			})
+		}
+	}
+
+	// Return auth URL for user to visit
+	authURL := s.auth.AuthURL()
+	return mcp.NewToolResultJSON(AuthInitResponse{
+		Status:  "auth_required",
+		AuthURL: authURL,
+		Message: "visit the auth_url in a browser, authorize the app, then call auth_complete with the code",
+	})
+}
+
+// AuthCompleteResponse is the response for auth_complete tool
+type AuthCompleteResponse struct {
+	Success bool   `json:"success"`
+	Message string `json:"message"`
+}
+
+func (s *Server) handleAuthComplete(ctx context.Context, request mcp.CallToolRequest) (*mcp.CallToolResult, error) {
+	// In ISH mode, return simulated response
+	if os.Getenv("ISH_MODE") == "true" {
+		return mcp.NewToolResultJSON(AuthCompleteResponse{
+			Success: true,
+			Message: "ISH mode - auth completion simulated",
+		})
+	}
+
+	if s.auth == nil {
+		return mcp.NewToolResultJSON(AuthCompleteResponse{
+			Success: false,
+			Message: "authenticator not initialized",
+		})
+	}
+
+	code, err := request.RequireString("code")
+	if err != nil {
+		return mcp.NewToolResultError(err.Error()), nil
+	}
+
+	err = s.auth.ExchangeCode(ctx, code)
+	if err != nil {
+		return mcp.NewToolResultJSON(AuthCompleteResponse{
+			Success: false,
+			Message: fmt.Sprintf("token exchange failed: %v", err),
+		})
+	}
+
+	return mcp.NewToolResultJSON(AuthCompleteResponse{
+		Success: true,
+		Message: "authentication completed successfully - token saved",
+	})
+}
+
+// AuthRevokeResponse is the response for auth_revoke tool
+type AuthRevokeResponse struct {
+	Success bool   `json:"success"`
+	Message string `json:"message"`
+}
+
+func (s *Server) handleAuthRevoke(ctx context.Context, request mcp.CallToolRequest) (*mcp.CallToolResult, error) {
+	// In ISH mode, return simulated response
+	if os.Getenv("ISH_MODE") == "true" {
+		return mcp.NewToolResultJSON(AuthRevokeResponse{
+			Success: true,
+			Message: "ISH mode - auth revocation simulated",
+		})
+	}
+
+	if s.auth == nil {
+		return mcp.NewToolResultJSON(AuthRevokeResponse{
+			Success: false,
+			Message: "authenticator not initialized",
+		})
+	}
+
+	err := s.auth.RevokeToken()
+	if err != nil {
+		return mcp.NewToolResultJSON(AuthRevokeResponse{
+			Success: false,
+			Message: fmt.Sprintf("failed to revoke token: %v", err),
+		})
+	}
+
+	return mcp.NewToolResultJSON(AuthRevokeResponse{
+		Success: true,
+		Message: "token revoked - use auth_init to start new authentication flow",
+	})
 }
 
 // ListTools returns all registered tools

@@ -870,6 +870,12 @@ func TestToolRegistrationCompleteness(t *testing.T) {
 		"people_create_contact",
 		"people_update_contact",
 		"people_delete_contact",
+		// Auth tools
+		"auth_status",
+		"auth_info",
+		"auth_init",
+		"auth_complete",
+		"auth_revoke",
 	}
 
 	for _, expectedTool := range expectedTools {

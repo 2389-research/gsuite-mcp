@@ -12,6 +12,8 @@ import (
 	"os"
 	"path/filepath"
 	"strings"
+	"sync"
+	"time"
 
 	"golang.org/x/oauth2"
 	"golang.org/x/oauth2/google"
@@ -75,10 +77,11 @@ func (a *Authenticator) GetClient(ctx context.Context) (*http.Client, error) {
 		}
 	}
 
-	// Check if token needs refresh
+	// Wrap token source to persist refreshed tokens
 	tokenSource := a.config.TokenSource(ctx, token)
+	persistentSource := NewPersistentTokenSource(tokenSource, a.saveToken)
 
-	return oauth2.NewClient(ctx, tokenSource), nil
+	return oauth2.NewClient(ctx, persistentSource), nil
 }
 
 // loadToken loads a cached token from disk
@@ -184,4 +187,96 @@ func (a *Authenticator) RevokeToken() error {
 		return os.Remove(a.tokenPath)
 	}
 	return nil
+}
+
+// PersistentTokenSource wraps an oauth2.TokenSource and persists refreshed tokens to disk.
+// This ensures that when the underlying TokenSource automatically refreshes an expired
+// access token, the new token is saved so it survives server restarts.
+type PersistentTokenSource struct {
+	source    oauth2.TokenSource
+	lastToken *oauth2.Token
+	saveFn    func(*oauth2.Token) error
+	mu        sync.Mutex
+}
+
+// NewPersistentTokenSource creates a TokenSource that persists tokens when they change.
+func NewPersistentTokenSource(source oauth2.TokenSource, saveFn func(*oauth2.Token) error) *PersistentTokenSource {
+	return &PersistentTokenSource{
+		source: source,
+		saveFn: saveFn,
+	}
+}
+
+// Token returns a valid token, persisting it to disk if it changed.
+func (p *PersistentTokenSource) Token() (*oauth2.Token, error) {
+	token, err := p.source.Token()
+	if err != nil {
+		return nil, err
+	}
+
+	p.mu.Lock()
+	defer p.mu.Unlock()
+
+	// Only save if token changed (new access token)
+	if p.lastToken == nil || token.AccessToken != p.lastToken.AccessToken {
+		// Best-effort save - don't fail the token fetch if persistence fails
+		_ = p.saveFn(token)
+		p.lastToken = token
+	}
+
+	return token, nil
+}
+
+// TokenInfo contains metadata about the cached OAuth token
+type TokenInfo struct {
+	Valid       bool          `json:"valid"`
+	AccessToken string        `json:"access_token"` // Masked for security
+	Expiry      time.Time     `json:"expiry"`
+	ExpiresIn   time.Duration `json:"expires_in"`
+	HasRefresh  bool          `json:"has_refresh"`
+}
+
+// TokenInfo returns metadata about the cached token without making API calls.
+func (a *Authenticator) TokenInfo() (*TokenInfo, error) {
+	token, err := a.loadToken()
+	if err != nil {
+		// No token file or unreadable - return empty info
+		return &TokenInfo{Valid: false}, nil
+	}
+
+	info := &TokenInfo{
+		Valid:       token.AccessToken != "" && token.Valid(),
+		AccessToken: maskToken(token.AccessToken),
+		Expiry:      token.Expiry,
+		HasRefresh:  token.RefreshToken != "",
+	}
+
+	if !token.Expiry.IsZero() {
+		info.ExpiresIn = time.Until(token.Expiry)
+	}
+
+	return info, nil
+}
+
+// maskToken returns a masked version of the token for safe display.
+// Shows first 4 and last 4 characters, e.g., "ya29...7890"
+func maskToken(token string) string {
+	if len(token) <= 8 {
+		return token
+	}
+	return token[:4] + "..." + token[len(token)-4:]
+}
+
+// AuthURL returns the OAuth authorization URL for user authentication.
+func (a *Authenticator) AuthURL() string {
+	return a.config.AuthCodeURL("state-token", oauth2.AccessTypeOffline)
+}
+
+// ExchangeCode exchanges an authorization code for tokens and saves them.
+func (a *Authenticator) ExchangeCode(ctx context.Context, code string) error {
+	token, err := a.config.Exchange(ctx, code)
+	if err != nil {
+		return fmt.Errorf("token exchange failed: %w", err)
+	}
+	return a.saveToken(token)
 }
