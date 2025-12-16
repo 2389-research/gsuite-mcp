@@ -169,3 +169,44 @@ func TestServer_HandlePeopleGetContact(t *testing.T) {
 	// but the handler should still work correctly
 	assert.NotNil(t, result)
 }
+
+func TestExtractAuthCode(t *testing.T) {
+	tests := []struct {
+		name     string
+		input    string
+		expected string
+	}{
+		{
+			name:     "full localhost URL",
+			input:    "http://localhost/?code=4/0AfJohXl123abc&scope=email",
+			expected: "4/0AfJohXl123abc",
+		},
+		{
+			name:     "URL with multiple params",
+			input:    "http://localhost:8080/?state=xyz&code=AUTH_CODE_HERE&scope=a%20b",
+			expected: "AUTH_CODE_HERE",
+		},
+		{
+			name:     "raw code passthrough",
+			input:    "4/0AfJohXl123abc",
+			expected: "4/0AfJohXl123abc",
+		},
+		{
+			name:     "URL without code param",
+			input:    "http://localhost/?error=access_denied",
+			expected: "http://localhost/?error=access_denied",
+		},
+		{
+			name:     "empty string",
+			input:    "",
+			expected: "",
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			result := extractAuthCode(tt.input)
+			assert.Equal(t, tt.expected, result)
+		})
+	}
+}

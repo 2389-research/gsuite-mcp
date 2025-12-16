@@ -7,6 +7,7 @@ import (
 	"context"
 	"fmt"
 	"net/http"
+	"net/url"
 	"os"
 	"sort"
 	"strings"
@@ -442,11 +443,11 @@ func (s *Server) registerTools() {
 
 	s.mcp.AddTool(mcp.Tool{
 		Name:        "auth_complete",
-		Description: "Complete OAuth flow by exchanging authorization code for tokens. Call this after the user visits the auth_url from auth_init and provides the code they received.",
+		Description: "Complete OAuth flow by exchanging authorization code for tokens. Call this after the user visits the auth_url from auth_init. The user should provide the FULL redirect URL from their browser (e.g., http://localhost/?code=4/0AfJohX...) - the code will be extracted automatically.",
 		InputSchema: mcp.ToolInputSchema{
 			Type: "object",
 			Properties: map[string]interface{}{
-				"code": map[string]string{"type": "string", "description": "Authorization code from OAuth redirect"},
+				"code": map[string]string{"type": "string", "description": "The full redirect URL from the browser, or just the authorization code"},
 			},
 			Required: []string{"code"},
 		},
@@ -1153,6 +1154,21 @@ func (s *Server) handlePeopleDeleteContact(ctx context.Context, request mcp.Call
 
 // Auth tool handlers
 
+// extractAuthCode extracts the authorization code from a URL or returns the input as-is.
+// Handles Google's redirect URL format: http://localhost/?code=4/0AfJohX...&scope=...
+func extractAuthCode(codeOrURL string) string {
+	// If it looks like a URL, try to parse it
+	if strings.HasPrefix(codeOrURL, "http://") || strings.HasPrefix(codeOrURL, "https://") {
+		if u, err := url.Parse(codeOrURL); err == nil {
+			if code := u.Query().Get("code"); code != "" {
+				return code
+			}
+		}
+	}
+	// Return as-is (already a code, or unparseable)
+	return codeOrURL
+}
+
 // AuthStatusResponse is the response for auth_status tool
 type AuthStatusResponse struct {
 	Valid   bool   `json:"valid"`
@@ -1273,7 +1289,7 @@ func (s *Server) handleAuthInit(ctx context.Context, request mcp.CallToolRequest
 	return mcp.NewToolResultJSON(AuthInitResponse{
 		Status:  "auth_required",
 		AuthURL: authURL,
-		Message: "visit the auth_url in a browser, authorize the app, then call auth_complete with the code",
+		Message: "visit the auth_url in a browser and authorize the app. After authorizing, copy the FULL URL from your browser (it will look like http://localhost/?code=...) and provide it to auth_complete",
 	})
 }
 
@@ -1299,10 +1315,13 @@ func (s *Server) handleAuthComplete(ctx context.Context, request mcp.CallToolReq
 		})
 	}
 
-	code, err := request.RequireString("code")
+	codeOrURL, err := request.RequireString("code")
 	if err != nil {
 		return mcp.NewToolResultError(err.Error()), nil
 	}
+
+	// Extract code from URL if user provided the full redirect URL
+	code := extractAuthCode(codeOrURL)
 
 	err = s.auth.ExchangeCode(ctx, code)
 	if err != nil {
