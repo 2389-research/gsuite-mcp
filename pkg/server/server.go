@@ -47,9 +47,15 @@ func NewServer(ctx context.Context) (*Server, error) {
 		if err != nil {
 			return nil, err
 		}
-		client, err = authenticator.GetClient(ctx)
+		// Use non-interactive auth - if no token exists, client will be nil
+		// and API calls will fail gracefully. User can authenticate via auth_init/auth_complete tools.
+		client, err = authenticator.GetClientIfAuthenticated(ctx)
 		if err != nil {
 			return nil, err
+		}
+		// If no token yet, use a placeholder client that will fail on API calls
+		if client == nil {
+			client = &http.Client{}
 		}
 	}
 

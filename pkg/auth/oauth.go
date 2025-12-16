@@ -189,6 +189,32 @@ func (a *Authenticator) RevokeToken() error {
 	return nil
 }
 
+// HasToken checks if a token file exists (does not validate the token)
+func (a *Authenticator) HasToken() bool {
+	_, err := os.Stat(a.tokenPath)
+	return err == nil
+}
+
+// GetClientIfAuthenticated returns an HTTP client only if a token already exists.
+// Unlike GetClient, this never triggers interactive authentication.
+// Returns (nil, nil) if no token exists - caller should handle this gracefully.
+func (a *Authenticator) GetClientIfAuthenticated(ctx context.Context) (*http.Client, error) {
+	token, err := a.loadToken()
+	if err != nil {
+		// No token file - return nil client (not an error, just not authenticated)
+		if os.IsNotExist(err) {
+			return nil, nil
+		}
+		return nil, err
+	}
+
+	// Wrap token source to persist refreshed tokens
+	tokenSource := a.config.TokenSource(ctx, token)
+	persistentSource := NewPersistentTokenSource(tokenSource, a.saveToken)
+
+	return oauth2.NewClient(ctx, persistentSource), nil
+}
+
 // PersistentTokenSource wraps an oauth2.TokenSource and persists refreshed tokens to disk.
 // This ensures that when the underlying TokenSource automatically refreshes an expired
 // access token, the new token is saved so it survives server restarts.

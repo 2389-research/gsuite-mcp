@@ -535,6 +535,63 @@ func TestExchangeCode_InvalidCode(t *testing.T) {
 	assert.Error(t, err)
 }
 
+func TestHasToken(t *testing.T) {
+	tmpDir := t.TempDir()
+	tokenPath := filepath.Join(tmpDir, "token.json")
+	credPath := createValidCredentialsFile(t, tmpDir)
+
+	auth, err := NewAuthenticator(credPath, tokenPath)
+	require.NoError(t, err)
+
+	// No token file yet
+	assert.False(t, auth.HasToken())
+
+	// Create token file
+	token := &oauth2.Token{AccessToken: "test"}
+	data, _ := json.Marshal(token)
+	require.NoError(t, os.WriteFile(tokenPath, data, 0600))
+
+	// Now has token
+	assert.True(t, auth.HasToken())
+}
+
+func TestGetClientIfAuthenticated_NoToken(t *testing.T) {
+	tmpDir := t.TempDir()
+	tokenPath := filepath.Join(tmpDir, "nonexistent.json")
+	credPath := createValidCredentialsFile(t, tmpDir)
+
+	auth, err := NewAuthenticator(credPath, tokenPath)
+	require.NoError(t, err)
+
+	// Should return nil client, nil error (not block for interactive auth)
+	client, err := auth.GetClientIfAuthenticated(context.Background())
+	assert.NoError(t, err)
+	assert.Nil(t, client)
+}
+
+func TestGetClientIfAuthenticated_WithToken(t *testing.T) {
+	tmpDir := t.TempDir()
+	tokenPath := filepath.Join(tmpDir, "token.json")
+	credPath := createValidCredentialsFile(t, tmpDir)
+
+	// Create a token file
+	token := &oauth2.Token{
+		AccessToken:  "test-token",
+		RefreshToken: "refresh",
+		Expiry:       time.Now().Add(time.Hour),
+	}
+	data, _ := json.Marshal(token)
+	require.NoError(t, os.WriteFile(tokenPath, data, 0600))
+
+	auth, err := NewAuthenticator(credPath, tokenPath)
+	require.NoError(t, err)
+
+	// Should return a client
+	client, err := auth.GetClientIfAuthenticated(context.Background())
+	assert.NoError(t, err)
+	assert.NotNil(t, client)
+}
+
 // Helper function to create a valid OAuth credentials file for testing
 func createValidCredentialsFile(t *testing.T, dir string) string {
 	t.Helper()
