@@ -428,7 +428,7 @@ func (s *Server) registerTools() {
 
 	s.mcp.AddTool(mcp.Tool{
 		Name:        "auth_init",
-		Description: "Start OAuth authentication flow. Returns auth URL if needed, or current status if auth is valid (use force=true to always get URL)",
+		Description: "Start OAuth authentication flow. Returns an auth_url the USER must visit in their browser to authorize. After authorizing, the user receives a code to provide to auth_complete. Returns current status if already authenticated (use force=true to re-authenticate).",
 		InputSchema: mcp.ToolInputSchema{
 			Type: "object",
 			Properties: map[string]interface{}{
@@ -442,7 +442,7 @@ func (s *Server) registerTools() {
 
 	s.mcp.AddTool(mcp.Tool{
 		Name:        "auth_complete",
-		Description: "Complete OAuth flow by exchanging authorization code for tokens",
+		Description: "Complete OAuth flow by exchanging authorization code for tokens. Call this after the user visits the auth_url from auth_init and provides the code they received.",
 		InputSchema: mcp.ToolInputSchema{
 			Type: "object",
 			Properties: map[string]interface{}{
