@@ -90,6 +90,7 @@ func NewServer(ctx context.Context) (*Server, error) {
 	)
 
 	s.mcp = mcpServer
+	// Register tools, prompts and resources (schemas are kept intact for client compatibility).
 	s.registerTools()
 	s.registerPrompts()
 	s.registerResources()
@@ -413,8 +414,13 @@ func (s *Server) registerTools() {
 		Name:        "auth_status",
 		Description: "Check if OAuth authentication is valid by making a test API call",
 		InputSchema: mcp.ToolInputSchema{
-			Type:       "object",
-			Properties: map[string]interface{}{},
+			Type: "object",
+			Properties: map[string]interface{}{
+				"noop": map[string]interface{}{
+					"type":        "boolean",
+					"description": "No arguments needed; you can omit this",
+				},
+			},
 		},
 	}, s.handleAuthStatus)
 
@@ -422,8 +428,13 @@ func (s *Server) registerTools() {
 		Name:        "auth_info",
 		Description: "Get OAuth token metadata (expiry, scopes) without making API calls",
 		InputSchema: mcp.ToolInputSchema{
-			Type:       "object",
-			Properties: map[string]interface{}{},
+			Type: "object",
+			Properties: map[string]interface{}{
+				"noop": map[string]interface{}{
+					"type":        "boolean",
+					"description": "No arguments needed; you can omit this",
+				},
+			},
 		},
 	}, s.handleAuthInfo)
 
@@ -457,8 +468,13 @@ func (s *Server) registerTools() {
 		Name:        "auth_revoke",
 		Description: "Delete cached OAuth token, forcing re-authentication on next API call",
 		InputSchema: mcp.ToolInputSchema{
-			Type:       "object",
-			Properties: map[string]interface{}{},
+			Type: "object",
+			Properties: map[string]interface{}{
+				"noop": map[string]interface{}{
+					"type":        "boolean",
+					"description": "No arguments needed; you can omit this",
+				},
+			},
 		},
 	}, s.handleAuthRevoke)
 }
