@@ -136,6 +136,8 @@ func (s *Server) registerTools() {
 			Type: "object",
 			Properties: map[string]interface{}{
 				"to":          map[string]string{"type": "string", "description": "Recipient email address"},
+				"cc":          map[string]string{"type": "string", "description": "CC email address(es) (comma-separated)"},
+				"bcc":         map[string]string{"type": "string", "description": "BCC email address(es) (comma-separated)"},
 				"subject":     map[string]string{"type": "string", "description": "Email subject (auto-prefixed with Re: for replies)"},
 				"body":        map[string]string{"type": "string", "description": "Email body content"},
 				"in_reply_to": map[string]string{"type": "string", "description": "Message ID to reply to (auto-fetches threading headers)"},
@@ -151,6 +153,8 @@ func (s *Server) registerTools() {
 			Type: "object",
 			Properties: map[string]interface{}{
 				"to":          map[string]string{"type": "string", "description": "Recipient email address"},
+				"cc":          map[string]string{"type": "string", "description": "CC email address(es) (comma-separated)"},
+				"bcc":         map[string]string{"type": "string", "description": "BCC email address(es) (comma-separated)"},
 				"subject":     map[string]string{"type": "string", "description": "Email subject (auto-prefixed with Re: for replies)"},
 				"body":        map[string]string{"type": "string", "description": "Email body content"},
 				"in_reply_to": map[string]string{"type": "string", "description": "Message ID to reply to (auto-fetches threading headers)"},
@@ -611,8 +615,10 @@ func (s *Server) handleGmailSendMessage(ctx context.Context, request mcp.CallToo
 	}
 
 	inReplyTo := request.GetString("in_reply_to", "")
+	cc := request.GetString("cc", "")
+	bcc := request.GetString("bcc", "")
 
-	msg, err := s.gmail.SendMessage(ctx, to, subject, body, inReplyTo)
+	msg, err := s.gmail.SendMessage(ctx, to, subject, body, inReplyTo, cc, bcc)
 	if err != nil {
 		return mcp.NewToolResultError(err.Error()), nil
 	}
@@ -637,8 +643,10 @@ func (s *Server) handleGmailCreateDraft(ctx context.Context, request mcp.CallToo
 	}
 
 	inReplyTo := request.GetString("in_reply_to", "")
+	cc := request.GetString("cc", "")
+	bcc := request.GetString("bcc", "")
 
-	draft, err := s.gmail.CreateDraft(ctx, to, subject, body, inReplyTo)
+	draft, err := s.gmail.CreateDraft(ctx, to, subject, body, inReplyTo, cc, bcc)
 	if err != nil {
 		return mcp.NewToolResultError(err.Error()), nil
 	}

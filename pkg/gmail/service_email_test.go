@@ -275,7 +275,7 @@ func TestBuildPlainTextMessage_EdgeCases_SpecialCharacters(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			result := buildPlainTextMessage(tt.to, tt.subject, tt.body, "", "")
+			result := buildPlainTextMessage(tt.to, "", "", tt.subject, tt.body, "", "")
 
 			assert.Contains(t, result, "Content-Type: text/plain; charset=\"UTF-8\"")
 			assert.Contains(t, result, "MIME-Version: 1.0")
@@ -336,7 +336,7 @@ func TestBuildHTMLMessage_EdgeCases_SpecialCharacters(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			result := buildHTMLMessage(tt.to, tt.subject, tt.body, "", "")
+			result := buildHTMLMessage(tt.to, "", "", tt.subject, tt.body, "", "")
 
 			assert.Contains(t, result, "Content-Type: text/html; charset=\"UTF-8\"")
 			assert.Contains(t, result, "MIME-Version: 1.0")
@@ -379,7 +379,7 @@ func TestBuildPlainTextMessage_EdgeCases_LargeBody(t *testing.T) {
 			to := "test@example.com"
 			subject := "Large body test"
 
-			result := buildPlainTextMessage(to, subject, body, "", "")
+			result := buildPlainTextMessage(to, "", "", subject, body, "", "")
 
 			assert.Contains(t, result, "Content-Type: text/plain; charset=\"UTF-8\"")
 			assert.Contains(t, result, body)
@@ -448,7 +448,7 @@ func TestBuildHTMLMessage_EdgeCases_MalformedHTML(t *testing.T) {
 			to := "test@example.com"
 			subject := "Malformed HTML test"
 
-			result := buildHTMLMessage(to, subject, tt.body, "", "")
+			result := buildHTMLMessage(to, "", "", subject, tt.body, "", "")
 
 			assert.Contains(t, result, "Content-Type: text/html; charset=\"UTF-8\"")
 			assert.Contains(t, result, "MIME-Version: 1.0")
@@ -492,7 +492,7 @@ func TestBuildPlainTextMessage_EdgeCases_HeaderInjectionPrevention(t *testing.T)
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			result := buildPlainTextMessage(tt.to, tt.subject, "Test body", "", "")
+			result := buildPlainTextMessage(tt.to, "", "", tt.subject, "Test body", "", "")
 
 			for _, forbidden := range tt.shouldNotAppear {
 				assert.NotContains(t, result, forbidden,
@@ -534,7 +534,7 @@ func TestBuildHTMLMessage_EdgeCases_HeaderInjectionPrevention(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			result := buildHTMLMessage(tt.to, tt.subject, "<html><body>Test</body></html>", "", "")
+			result := buildHTMLMessage(tt.to, "", "", tt.subject, "<html><body>Test</body></html>", "", "")
 
 			for _, forbidden := range tt.shouldNotAppear {
 				assert.NotContains(t, result, forbidden,
@@ -611,14 +611,14 @@ func TestBuildMessages_EdgeCases_EmptyFields(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run(tt.name+" (plain text)", func(t *testing.T) {
-			result := buildPlainTextMessage(tt.to, tt.subject, tt.body, "", "")
+			result := buildPlainTextMessage(tt.to, "", "", tt.subject, tt.body, "", "")
 			assert.Contains(t, result, "MIME-Version: 1.0")
 			assert.Contains(t, result, "Content-Type: text/plain")
 		})
 
 		t.Run(tt.name+" (HTML)", func(t *testing.T) {
 			htmlBody := "<html><body>" + tt.body + "</body></html>"
-			result := buildHTMLMessage(tt.to, tt.subject, htmlBody, "", "")
+			result := buildHTMLMessage(tt.to, "", "", tt.subject, htmlBody, "", "")
 			assert.Contains(t, result, "MIME-Version: 1.0")
 			assert.Contains(t, result, "Content-Type: text/html")
 		})

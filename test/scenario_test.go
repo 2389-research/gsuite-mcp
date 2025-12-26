@@ -55,6 +55,8 @@ func TestScenario_EmailTriage(t *testing.T) {
 			"customer@example.com",
 			"Re: Your inquiry",
 			"Thank you for reaching out. We'll get back to you soon.",
+			"",
+			"",
 			"")
 
 		if err != nil {
@@ -237,6 +239,8 @@ func TestScenario_FullDayWorkflow(t *testing.T) {
 			"boss@example.com",
 			"Re: Urgent: Project status",
 			"The project is on track. Will send detailed update by EOD.",
+			"",
+			"",
 			"")
 
 		if err != nil {
