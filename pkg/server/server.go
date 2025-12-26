@@ -90,6 +90,7 @@ func NewServer(ctx context.Context) (*Server, error) {
 	)
 
 	s.mcp = mcpServer
+	// Register tools, prompts and resources (schemas are kept intact for client compatibility).
 	s.registerTools()
 	s.registerPrompts()
 	s.registerResources()
@@ -135,6 +136,8 @@ func (s *Server) registerTools() {
 			Type: "object",
 			Properties: map[string]interface{}{
 				"to":          map[string]string{"type": "string", "description": "Recipient email address"},
+				"cc":          map[string]string{"type": "string", "description": "CC email address(es) (comma-separated)"},
+				"bcc":         map[string]string{"type": "string", "description": "BCC email address(es) (comma-separated)"},
 				"subject":     map[string]string{"type": "string", "description": "Email subject (auto-prefixed with Re: for replies)"},
 				"body":        map[string]string{"type": "string", "description": "Email body content"},
 				"in_reply_to": map[string]string{"type": "string", "description": "Message ID to reply to (auto-fetches threading headers)"},
@@ -150,6 +153,8 @@ func (s *Server) registerTools() {
 			Type: "object",
 			Properties: map[string]interface{}{
 				"to":          map[string]string{"type": "string", "description": "Recipient email address"},
+				"cc":          map[string]string{"type": "string", "description": "CC email address(es) (comma-separated)"},
+				"bcc":         map[string]string{"type": "string", "description": "BCC email address(es) (comma-separated)"},
 				"subject":     map[string]string{"type": "string", "description": "Email subject (auto-prefixed with Re: for replies)"},
 				"body":        map[string]string{"type": "string", "description": "Email body content"},
 				"in_reply_to": map[string]string{"type": "string", "description": "Message ID to reply to (auto-fetches threading headers)"},
@@ -413,8 +418,13 @@ func (s *Server) registerTools() {
 		Name:        "auth_status",
 		Description: "Check if OAuth authentication is valid by making a test API call",
 		InputSchema: mcp.ToolInputSchema{
-			Type:       "object",
-			Properties: map[string]interface{}{},
+			Type: "object",
+			Properties: map[string]interface{}{
+				"noop": map[string]interface{}{
+					"type":        "boolean",
+					"description": "No arguments needed; you can omit this",
+				},
+			},
 		},
 	}, s.handleAuthStatus)
 
@@ -422,8 +432,13 @@ func (s *Server) registerTools() {
 		Name:        "auth_info",
 		Description: "Get OAuth token metadata (expiry, scopes) without making API calls",
 		InputSchema: mcp.ToolInputSchema{
-			Type:       "object",
-			Properties: map[string]interface{}{},
+			Type: "object",
+			Properties: map[string]interface{}{
+				"noop": map[string]interface{}{
+					"type":        "boolean",
+					"description": "No arguments needed; you can omit this",
+				},
+			},
 		},
 	}, s.handleAuthInfo)
 
@@ -457,8 +472,13 @@ func (s *Server) registerTools() {
 		Name:        "auth_revoke",
 		Description: "Delete cached OAuth token, forcing re-authentication on next API call",
 		InputSchema: mcp.ToolInputSchema{
-			Type:       "object",
-			Properties: map[string]interface{}{},
+			Type: "object",
+			Properties: map[string]interface{}{
+				"noop": map[string]interface{}{
+					"type":        "boolean",
+					"description": "No arguments needed; you can omit this",
+				},
+			},
 		},
 	}, s.handleAuthRevoke)
 }
@@ -595,8 +615,10 @@ func (s *Server) handleGmailSendMessage(ctx context.Context, request mcp.CallToo
 	}
 
 	inReplyTo := request.GetString("in_reply_to", "")
+	cc := request.GetString("cc", "")
+	bcc := request.GetString("bcc", "")
 
-	msg, err := s.gmail.SendMessage(ctx, to, subject, body, inReplyTo)
+	msg, err := s.gmail.SendMessage(ctx, to, subject, body, inReplyTo, cc, bcc)
 	if err != nil {
 		return mcp.NewToolResultError(err.Error()), nil
 	}
@@ -621,8 +643,10 @@ func (s *Server) handleGmailCreateDraft(ctx context.Context, request mcp.CallToo
 	}
 
 	inReplyTo := request.GetString("in_reply_to", "")
+	cc := request.GetString("cc", "")
+	bcc := request.GetString("bcc", "")
 
-	draft, err := s.gmail.CreateDraft(ctx, to, subject, body, inReplyTo)
+	draft, err := s.gmail.CreateDraft(ctx, to, subject, body, inReplyTo, cc, bcc)
 	if err != nil {
 		return mcp.NewToolResultError(err.Error()), nil
 	}

@@ -60,6 +60,8 @@ Send an email.
 
 **Parameters:**
 - `to` (string, required): Recipient email address
+- `cc` (string, optional): CC email address(es) (comma-separated)
+- `bcc` (string, optional): BCC email address(es) (comma-separated)
 - `subject` (string, required): Email subject
 - `body` (string, required): Email body (plain text)
 
@@ -69,6 +71,8 @@ Send an email.
   "tool": "gmail_send_message",
   "arguments": {
     "to": "recipient@example.com",
+    "cc": "manager@example.com",
+    "bcc": "audit@example.com",
     "subject": "Hello from GSuite MCP",
     "body": "This is a test message from the GSuite MCP server."
   }
@@ -85,6 +89,33 @@ Send an email.
 ```
 
 Sent message object with `id`, `threadId`, and `labelIds`.
+
+---
+
+#### gmail_create_draft
+
+Create a draft email (not sent yet). Use `in_reply_to` to create a reply draft (auto-fetches threading headers).
+
+**Parameters:**
+- `to` (string, required): Recipient email address
+- `cc` (string, optional): CC email address(es) (comma-separated)
+- `bcc` (string, optional): BCC email address(es) (comma-separated)
+- `subject` (string, required): Email subject
+- `body` (string, required): Email body (plain text)
+- `in_reply_to` (string, optional): Message ID to reply to (auto-fetches threading headers)
+
+**Example:**
+```json
+{
+  "tool": "gmail_create_draft",
+  "arguments": {
+    "to": "recipient@example.com",
+    "cc": "manager@example.com",
+    "subject": "Draft for review",
+    "body": "Here is a draft email for review before sending."
+  }
+}
+```
 
 ---
 

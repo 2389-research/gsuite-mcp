@@ -67,13 +67,13 @@ func TestSendMessage_Validation(t *testing.T) {
 	ctx := context.Background()
 
 	t.Run("Empty recipient fails", func(t *testing.T) {
-		_, err := svc.SendMessage(ctx, "", "Subject", "Body", "")
+		_, err := svc.SendMessage(ctx, "", "Subject", "Body", "", "", "")
 		require.Error(t, err)
 		assert.Contains(t, err.Error(), "recipient address (to) cannot be empty")
 	})
 
 	t.Run("Empty subject fails", func(t *testing.T) {
-		_, err := svc.SendMessage(ctx, "test@example.com", "", "Body", "")
+		_, err := svc.SendMessage(ctx, "test@example.com", "", "Body", "", "", "")
 		require.Error(t, err)
 		assert.Contains(t, err.Error(), "subject cannot be empty")
 	})
@@ -90,13 +90,13 @@ func TestCreateDraft_Validation(t *testing.T) {
 	ctx := context.Background()
 
 	t.Run("Empty recipient fails", func(t *testing.T) {
-		_, err := svc.CreateDraft(ctx, "", "Subject", "Body", "")
+		_, err := svc.CreateDraft(ctx, "", "Subject", "Body", "", "", "")
 		require.Error(t, err)
 		assert.Contains(t, err.Error(), "recipient address (to) cannot be empty")
 	})
 
 	t.Run("Empty subject fails", func(t *testing.T) {
-		_, err := svc.CreateDraft(ctx, "test@example.com", "", "Body", "")
+		_, err := svc.CreateDraft(ctx, "test@example.com", "", "Body", "", "", "")
 		require.Error(t, err)
 		assert.Contains(t, err.Error(), "subject cannot be empty")
 	})
@@ -193,7 +193,7 @@ func TestBuildPlainTextMessage(t *testing.T) {
 	subject := "Test Subject"
 	body := "This is a test body"
 
-	result := buildPlainTextMessage(to, subject, body, "", "")
+	result := buildPlainTextMessage(to, "", "", subject, body, "", "")
 
 	assert.Contains(t, result, "To: test@example.com")
 	assert.Contains(t, result, "Subject: Test Subject")
@@ -202,12 +202,28 @@ func TestBuildPlainTextMessage(t *testing.T) {
 	assert.Contains(t, result, body)
 }
 
+func TestBuildPlainTextMessage_WithCcAndBcc(t *testing.T) {
+	to := "test@example.com"
+	cc := "cc@example.com"
+	bcc := "bcc@example.com"
+	subject := "Test Subject"
+	body := "This is a test body"
+
+	result := buildPlainTextMessage(to, cc, bcc, subject, body, "", "")
+
+	assert.Contains(t, result, "To: test@example.com")
+	assert.Contains(t, result, "Cc: cc@example.com")
+	assert.Contains(t, result, "Bcc: bcc@example.com")
+	assert.Contains(t, result, "Subject: Test Subject")
+	assert.Contains(t, result, body)
+}
+
 func TestBuildHTMLMessage(t *testing.T) {
 	to := "test@example.com"
 	subject := "Test Subject"
 	body := "<html><body><h1>Hello</h1></body></html>"
 
-	result := buildHTMLMessage(to, subject, body, "", "")
+	result := buildHTMLMessage(to, "", "", subject, body, "", "")
 
 	assert.Contains(t, result, "To: test@example.com")
 	assert.Contains(t, result, "Subject: Test Subject")
@@ -340,7 +356,7 @@ func TestBuildPlainTextMessage_WithThreading(t *testing.T) {
 	inReplyTo := "<original123@example.com>"
 	references := "<ref1@example.com> <original123@example.com>"
 
-	result := buildPlainTextMessage(to, subject, body, inReplyTo, references)
+	result := buildPlainTextMessage(to, "", "", subject, body, inReplyTo, references)
 
 	assert.Contains(t, result, "To: test@example.com")
 	assert.Contains(t, result, "Subject: Test Subject")
@@ -358,7 +374,7 @@ func TestBuildHTMLMessage_WithThreading(t *testing.T) {
 	inReplyTo := "<original123@example.com>"
 	references := "<ref1@example.com> <original123@example.com>"
 
-	result := buildHTMLMessage(to, subject, body, inReplyTo, references)
+	result := buildHTMLMessage(to, "", "", subject, body, inReplyTo, references)
 
 	assert.Contains(t, result, "To: test@example.com")
 	assert.Contains(t, result, "Subject: Test Subject")
@@ -374,7 +390,7 @@ func TestBuildPlainTextMessage_WithoutThreading(t *testing.T) {
 	subject := "Test Subject"
 	body := "Test body"
 
-	result := buildPlainTextMessage(to, subject, body, "", "")
+	result := buildPlainTextMessage(to, "", "", subject, body, "", "")
 
 	assert.Contains(t, result, "To: test@example.com")
 	assert.Contains(t, result, "Subject: Test Subject")
@@ -399,7 +415,7 @@ func TestBuildPlainTextMessage_EmptyThreadingHeaders(t *testing.T) {
 	subject := "Test Subject"
 	body := "Test body"
 
-	result := buildPlainTextMessage(to, subject, body, "", "")
+	result := buildPlainTextMessage(to, "", "", subject, body, "", "")
 
 	// Should NOT contain "In-Reply-To:" when inReplyTo is empty
 	assert.NotContains(t, result, "In-Reply-To:")
