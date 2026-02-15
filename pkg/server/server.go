@@ -216,6 +216,37 @@ func (s *Server) registerTools() {
 		},
 	}, s.handleGmailDeleteMessage)
 
+	s.mcp.AddTool(mcp.Tool{
+		Name:        "gmail_manage_labels",
+		Description: "Manage Gmail labels (list, get, create, update, delete). Use gmail_modify_labels to apply labels to messages.",
+		InputSchema: mcp.ToolInputSchema{
+			Type: "object",
+			Properties: map[string]interface{}{
+				"action": map[string]string{
+					"type":        "string",
+					"description": "Action to perform: list, get, create, update, delete",
+				},
+				"label_id": map[string]string{
+					"type":        "string",
+					"description": "Label ID (required for get, update, delete)",
+				},
+				"name": map[string]string{
+					"type":        "string",
+					"description": "Label name (required for create, optional for update). Use slashes for nesting: 'Projects/Client-A'",
+				},
+				"label_list_visibility": map[string]string{
+					"type":        "string",
+					"description": "Visibility in label list: labelShow, labelShowIfUnread, labelHide",
+				},
+				"message_list_visibility": map[string]string{
+					"type":        "string",
+					"description": "Visibility in message list: show, hide",
+				},
+			},
+			Required: []string{"action"},
+		},
+	}, s.handleGmailManageLabels)
+
 	// Calendar tools
 	s.mcp.AddTool(mcp.Tool{
 		Name:        "calendar_list_events",
@@ -716,6 +747,142 @@ func (s *Server) handleGmailDeleteMessage(ctx context.Context, request mcp.CallT
 	}
 
 	return mcp.NewToolResultText(fmt.Sprintf("Message %s deleted successfully", messageID)), nil
+}
+
+// LabelSummary is a compact representation of a label for list results
+type LabelSummary struct {
+	ID   string `json:"id"`
+	Name string `json:"name"`
+	Type string `json:"type"`
+}
+
+// ManageLabelsResponse wraps label management results
+type ManageLabelsResponse struct {
+	Action  string         `json:"action"`
+	Labels  []LabelSummary `json:"labels,omitempty"`
+	Label   *LabelSummary  `json:"label,omitempty"`
+	Count   int            `json:"count,omitempty"`
+	Message string         `json:"message,omitempty"`
+}
+
+func (s *Server) handleGmailManageLabels(ctx context.Context, request mcp.CallToolRequest) (*mcp.CallToolResult, error) {
+	action, err := request.RequireString("action")
+	if err != nil {
+		return mcp.NewToolResultError("action is required. Valid actions: list, get, create, update, delete"), nil
+	}
+
+	switch action {
+	case "list":
+		labels, err := s.gmail.ListLabels(ctx)
+		if err != nil {
+			return mcp.NewToolResultError(err.Error()), nil
+		}
+
+		summaries := make([]LabelSummary, len(labels))
+		for i, label := range labels {
+			summaries[i] = LabelSummary{
+				ID:   label.Id,
+				Name: label.Name,
+				Type: label.Type,
+			}
+		}
+
+		return mcp.NewToolResultJSON(ManageLabelsResponse{
+			Action: "list",
+			Labels: summaries,
+			Count:  len(summaries),
+		})
+
+	case "get":
+		labelID := request.GetString("label_id", "")
+		if labelID == "" {
+			return mcp.NewToolResultError("label_id is required for get action. Use action: list to see available labels."), nil
+		}
+
+		label, err := s.gmail.GetLabel(ctx, labelID)
+		if err != nil {
+			return mcp.NewToolResultError(fmt.Sprintf("label not found: %v. Use action: list to see available labels.", err)), nil
+		}
+
+		return mcp.NewToolResultJSON(ManageLabelsResponse{
+			Action: "get",
+			Label: &LabelSummary{
+				ID:   label.Id,
+				Name: label.Name,
+				Type: label.Type,
+			},
+		})
+
+	case "create":
+		name := request.GetString("name", "")
+		if name == "" {
+			return mcp.NewToolResultError("name is required for create action. Use slashes for nested labels: 'Projects/Client-A'"), nil
+		}
+
+		labelListVisibility := request.GetString("label_list_visibility", "")
+		messageListVisibility := request.GetString("message_list_visibility", "")
+
+		label, err := s.gmail.CreateLabel(ctx, name, labelListVisibility, messageListVisibility)
+		if err != nil {
+			return mcp.NewToolResultError(fmt.Sprintf("failed to create label: %v", err)), nil
+		}
+
+		return mcp.NewToolResultJSON(ManageLabelsResponse{
+			Action:  "create",
+			Label:   &LabelSummary{ID: label.Id, Name: label.Name, Type: label.Type},
+			Message: fmt.Sprintf("Label '%s' created with ID: %s", label.Name, label.Id),
+		})
+
+	case "update":
+		labelID := request.GetString("label_id", "")
+		if labelID == "" {
+			return mcp.NewToolResultError("label_id is required for update action. Use action: list to see available labels."), nil
+		}
+
+		name := request.GetString("name", "")
+		labelListVisibility := request.GetString("label_list_visibility", "")
+		messageListVisibility := request.GetString("message_list_visibility", "")
+
+		if name == "" && labelListVisibility == "" && messageListVisibility == "" {
+			return mcp.NewToolResultError("at least one of name, label_list_visibility, or message_list_visibility must be provided for update"), nil
+		}
+
+		label, err := s.gmail.UpdateLabel(ctx, labelID, name, labelListVisibility, messageListVisibility)
+		if err != nil {
+			if strings.Contains(err.Error(), "systemLabelCannotBeUpdated") {
+				return mcp.NewToolResultError("system labels (INBOX, SENT, etc.) cannot be updated. Only user-created labels can be modified."), nil
+			}
+			return mcp.NewToolResultError(fmt.Sprintf("failed to update label: %v", err)), nil
+		}
+
+		return mcp.NewToolResultJSON(ManageLabelsResponse{
+			Action:  "update",
+			Label:   &LabelSummary{ID: label.Id, Name: label.Name, Type: label.Type},
+			Message: fmt.Sprintf("Label '%s' updated successfully", label.Name),
+		})
+
+	case "delete":
+		labelID := request.GetString("label_id", "")
+		if labelID == "" {
+			return mcp.NewToolResultError("label_id is required for delete action. Use action: list to see available labels."), nil
+		}
+
+		err := s.gmail.DeleteLabel(ctx, labelID)
+		if err != nil {
+			if strings.Contains(err.Error(), "systemLabelCannotBeDeleted") {
+				return mcp.NewToolResultError("system labels (INBOX, SENT, etc.) cannot be deleted. Only user-created labels can be deleted."), nil
+			}
+			return mcp.NewToolResultError(fmt.Sprintf("failed to delete label: %v", err)), nil
+		}
+
+		return mcp.NewToolResultJSON(ManageLabelsResponse{
+			Action:  "delete",
+			Message: fmt.Sprintf("Label %s deleted successfully", labelID),
+		})
+
+	default:
+		return mcp.NewToolResultError(fmt.Sprintf("unknown action '%s'. Valid actions: list, get, create, update, delete", action)), nil
+	}
 }
 
 func (s *Server) handleCalendarListEvents(ctx context.Context, request mcp.CallToolRequest) (*mcp.CallToolResult, error) {

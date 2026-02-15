@@ -430,3 +430,111 @@ func (s *Service) GetProfile(ctx context.Context) (*gmail.Profile, error) {
 
 	return profile, nil
 }
+
+// ListLabels returns all labels for the user
+func (s *Service) ListLabels(ctx context.Context) ([]*gmail.Label, error) {
+	var result *gmail.ListLabelsResponse
+
+	err := retry.WithRetry(func() error {
+		var err error
+		result, err = s.svc.Users.Labels.List("me").Context(ctx).Do()
+		return err
+	}, 3, time.Second)
+
+	if err != nil {
+		return nil, fmt.Errorf("unable to list labels: %w", err)
+	}
+
+	return result.Labels, nil
+}
+
+// GetLabel retrieves a specific label by ID
+func (s *Service) GetLabel(ctx context.Context, labelID string) (*gmail.Label, error) {
+	var label *gmail.Label
+
+	err := retry.WithRetry(func() error {
+		var err error
+		label, err = s.svc.Users.Labels.Get("me", labelID).Context(ctx).Do()
+		return err
+	}, 3, time.Second)
+
+	if err != nil {
+		return nil, fmt.Errorf("unable to get label: %w", err)
+	}
+
+	return label, nil
+}
+
+// CreateLabel creates a new label
+func (s *Service) CreateLabel(ctx context.Context, name string, labelListVisibility, messageListVisibility string) (*gmail.Label, error) {
+	label := &gmail.Label{
+		Name: name,
+	}
+
+	// Set visibility options if provided
+	if labelListVisibility != "" {
+		label.LabelListVisibility = labelListVisibility
+	}
+	if messageListVisibility != "" {
+		label.MessageListVisibility = messageListVisibility
+	}
+
+	var created *gmail.Label
+	err := retry.WithRetry(func() error {
+		var err error
+		created, err = s.svc.Users.Labels.Create("me", label).Context(ctx).Do()
+		return err
+	}, 3, time.Second)
+
+	if err != nil {
+		return nil, fmt.Errorf("unable to create label: %w", err)
+	}
+
+	return created, nil
+}
+
+// UpdateLabel updates an existing label
+func (s *Service) UpdateLabel(ctx context.Context, labelID, name, labelListVisibility, messageListVisibility string) (*gmail.Label, error) {
+	// Fetch existing label first to preserve fields not being updated
+	existing, err := s.GetLabel(ctx, labelID)
+	if err != nil {
+		return nil, err
+	}
+
+	// Update fields if provided
+	if name != "" {
+		existing.Name = name
+	}
+	if labelListVisibility != "" {
+		existing.LabelListVisibility = labelListVisibility
+	}
+	if messageListVisibility != "" {
+		existing.MessageListVisibility = messageListVisibility
+	}
+
+	var updated *gmail.Label
+	err = retry.WithRetry(func() error {
+		var err error
+		updated, err = s.svc.Users.Labels.Update("me", labelID, existing).Context(ctx).Do()
+		return err
+	}, 3, time.Second)
+
+	if err != nil {
+		return nil, fmt.Errorf("unable to update label: %w", err)
+	}
+
+	return updated, nil
+}
+
+// DeleteLabel deletes a label
+func (s *Service) DeleteLabel(ctx context.Context, labelID string) error {
+	err := retry.WithRetry(func() error {
+		return s.svc.Users.Labels.Delete("me", labelID).Context(ctx).Do()
+	}, 3, time.Second)
+
+	if err != nil {
+		return fmt.Errorf("unable to delete label: %w", err)
+	}
+
+	return nil
+}
