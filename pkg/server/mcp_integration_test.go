@@ -857,6 +857,7 @@ func TestToolRegistrationCompleteness(t *testing.T) {
 		"gmail_modify_labels",
 		"gmail_trash_message",
 		"gmail_delete_message",
+		"gmail_manage_labels",
 		// Calendar tools
 		"calendar_list_events",
 		"calendar_get_event",

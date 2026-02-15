@@ -26,7 +26,7 @@ func setupMockGmailServer(t *testing.T) *httptest.Server {
 
 		// Labels list
 		if path == "/gmail/v1/users/me/labels" && method == "GET" {
-			w.Write([]byte(`{
+			_, _ = w.Write([]byte(`{
 				"labels": [
 					{"id": "INBOX", "name": "INBOX", "type": "system"},
 					{"id": "SENT", "name": "SENT", "type": "system"},
@@ -40,7 +40,7 @@ func setupMockGmailServer(t *testing.T) *httptest.Server {
 
 		// Labels create
 		if path == "/gmail/v1/users/me/labels" && method == "POST" {
-			w.Write([]byte(`{
+			_, _ = w.Write([]byte(`{
 				"id": "Label_new",
 				"name": "Test/NewLabel",
 				"type": "user",
@@ -54,7 +54,7 @@ func setupMockGmailServer(t *testing.T) *httptest.Server {
 		if strings.HasPrefix(path, "/gmail/v1/users/me/labels/") && method == "GET" {
 			labelID := strings.TrimPrefix(path, "/gmail/v1/users/me/labels/")
 			if labelID == "Label_1" {
-				w.Write([]byte(`{
+				_, _ = w.Write([]byte(`{
 					"id": "Label_1",
 					"name": "Projects",
 					"type": "user",
@@ -64,7 +64,7 @@ func setupMockGmailServer(t *testing.T) *httptest.Server {
 				return
 			}
 			if labelID == "INBOX" {
-				w.Write([]byte(`{
+				_, _ = w.Write([]byte(`{
 					"id": "INBOX",
 					"name": "INBOX",
 					"type": "system",
@@ -74,7 +74,7 @@ func setupMockGmailServer(t *testing.T) *httptest.Server {
 				return
 			}
 			w.WriteHeader(404)
-			w.Write([]byte(`{"error": {"code": 404, "message": "Label not found"}}`))
+			_, _ = w.Write([]byte(`{"error": {"code": 404, "message": "Label not found"}}`))
 			return
 		}
 
@@ -83,10 +83,10 @@ func setupMockGmailServer(t *testing.T) *httptest.Server {
 			labelID := strings.TrimPrefix(path, "/gmail/v1/users/me/labels/")
 			if labelID == "INBOX" || labelID == "SENT" || labelID == "TRASH" {
 				w.WriteHeader(400)
-				w.Write([]byte(`{"error": {"code": 400, "message": "systemLabelCannotBeUpdated"}}`))
+				_, _ = w.Write([]byte(`{"error": {"code": 400, "message": "systemLabelCannotBeUpdated"}}`))
 				return
 			}
-			w.Write([]byte(`{
+			_, _ = w.Write([]byte(`{
 				"id": "` + labelID + `",
 				"name": "Updated Name",
 				"type": "user"
@@ -99,7 +99,7 @@ func setupMockGmailServer(t *testing.T) *httptest.Server {
 			labelID := strings.TrimPrefix(path, "/gmail/v1/users/me/labels/")
 			if labelID == "INBOX" || labelID == "SENT" || labelID == "TRASH" {
 				w.WriteHeader(400)
-				w.Write([]byte(`{"error": {"code": 400, "message": "systemLabelCannotBeDeleted"}}`))
+				_, _ = w.Write([]byte(`{"error": {"code": 400, "message": "systemLabelCannotBeDeleted"}}`))
 				return
 			}
 			w.WriteHeader(204)
@@ -108,7 +108,7 @@ func setupMockGmailServer(t *testing.T) *httptest.Server {
 
 		// Default fallback
 		w.WriteHeader(404)
-		w.Write([]byte(`{"error": {"code": 404, "message": "not found"}}`))
+		_, _ = w.Write([]byte(`{"error": {"code": 404, "message": "not found"}}`))
 	}))
 }
 
@@ -176,7 +176,8 @@ func TestHandleGmailManageLabels_GetAction(t *testing.T) {
 
 		if textContent, ok := result.Content[0].(mcp.TextContent); ok {
 			var response map[string]interface{}
-			json.Unmarshal([]byte(textContent.Text), &response)
+			err := json.Unmarshal([]byte(textContent.Text), &response)
+			require.NoError(t, err)
 
 			assert.Equal(t, "get", response["action"])
 			label := response["label"].(map[string]interface{})
@@ -197,7 +198,8 @@ func TestHandleGmailManageLabels_GetAction(t *testing.T) {
 
 		if textContent, ok := result.Content[0].(mcp.TextContent); ok {
 			var response map[string]interface{}
-			json.Unmarshal([]byte(textContent.Text), &response)
+			err := json.Unmarshal([]byte(textContent.Text), &response)
+			require.NoError(t, err)
 
 			label := response["label"].(map[string]interface{})
 			assert.Equal(t, "INBOX", label["id"])
@@ -243,7 +245,8 @@ func TestHandleGmailManageLabels_CreateAction(t *testing.T) {
 
 		if textContent, ok := result.Content[0].(mcp.TextContent); ok {
 			var response map[string]interface{}
-			json.Unmarshal([]byte(textContent.Text), &response)
+			err := json.Unmarshal([]byte(textContent.Text), &response)
+			require.NoError(t, err)
 
 			assert.Equal(t, "create", response["action"])
 			assert.NotEmpty(t, response["message"])
@@ -289,7 +292,8 @@ func TestHandleGmailManageLabels_UpdateAction(t *testing.T) {
 
 		if textContent, ok := result.Content[0].(mcp.TextContent); ok {
 			var response map[string]interface{}
-			json.Unmarshal([]byte(textContent.Text), &response)
+			err := json.Unmarshal([]byte(textContent.Text), &response)
+			require.NoError(t, err)
 
 			assert.Equal(t, "update", response["action"])
 			assert.Contains(t, response["message"], "updated")
@@ -347,7 +351,8 @@ func TestHandleGmailManageLabels_DeleteAction(t *testing.T) {
 
 		if textContent, ok := result.Content[0].(mcp.TextContent); ok {
 			var response map[string]interface{}
-			json.Unmarshal([]byte(textContent.Text), &response)
+			err := json.Unmarshal([]byte(textContent.Text), &response)
+			require.NoError(t, err)
 
 			assert.Equal(t, "delete", response["action"])
 			assert.Contains(t, response["message"], "deleted")
