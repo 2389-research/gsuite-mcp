@@ -138,7 +138,7 @@ func (s *Service) GetMessageHeaders(ctx context.Context, messageID string) (*Thr
 
 // SendMessage sends an email with automatic HTML detection
 // If inReplyTo is provided (a message ID), threading headers are auto-fetched
-func (s *Service) SendMessage(ctx context.Context, to, subject, body, inReplyTo string) (*gmail.Message, error) {
+func (s *Service) SendMessage(ctx context.Context, to, subject, body, inReplyTo, cc, bcc string) (*gmail.Message, error) {
 	if to == "" {
 		return nil, fmt.Errorf("recipient address (to) cannot be empty")
 	}
@@ -167,9 +167,9 @@ func (s *Service) SendMessage(ctx context.Context, to, subject, body, inReplyTo 
 
 	var message string
 	if isHTML(body) {
-		message = buildHTMLMessage(to, subject, body, inReplyToHeader, referencesHeader)
+		message = buildHTMLMessage(to, cc, bcc, subject, body, inReplyToHeader, referencesHeader)
 	} else {
-		message = buildPlainTextMessage(to, subject, body, inReplyToHeader, referencesHeader)
+		message = buildPlainTextMessage(to, cc, bcc, subject, body, inReplyToHeader, referencesHeader)
 	}
 
 	encoded := base64.URLEncoding.EncodeToString([]byte(message))
@@ -214,9 +214,15 @@ func sanitizeHeader(value string) string {
 	return value
 }
 
-func buildPlainTextMessage(to, subject, body, inReplyTo, references string) string {
+func buildPlainTextMessage(to, cc, bcc, subject, body, inReplyTo, references string) string {
 	var headers strings.Builder
 	headers.WriteString(fmt.Sprintf("To: %s\r\n", sanitizeHeader(to)))
+	if cc != "" {
+		headers.WriteString(fmt.Sprintf("Cc: %s\r\n", sanitizeHeader(cc)))
+	}
+	if bcc != "" {
+		headers.WriteString(fmt.Sprintf("Bcc: %s\r\n", sanitizeHeader(bcc)))
+	}
 	headers.WriteString(fmt.Sprintf("Subject: %s\r\n", sanitizeHeader(subject)))
 	if inReplyTo != "" {
 		headers.WriteString(fmt.Sprintf("In-Reply-To: %s\r\n", sanitizeHeader(inReplyTo)))
@@ -231,9 +237,15 @@ func buildPlainTextMessage(to, subject, body, inReplyTo, references string) stri
 	return headers.String()
 }
 
-func buildHTMLMessage(to, subject, body, inReplyTo, references string) string {
+func buildHTMLMessage(to, cc, bcc, subject, body, inReplyTo, references string) string {
 	var headers strings.Builder
 	headers.WriteString(fmt.Sprintf("To: %s\r\n", sanitizeHeader(to)))
+	if cc != "" {
+		headers.WriteString(fmt.Sprintf("Cc: %s\r\n", sanitizeHeader(cc)))
+	}
+	if bcc != "" {
+		headers.WriteString(fmt.Sprintf("Bcc: %s\r\n", sanitizeHeader(bcc)))
+	}
 	headers.WriteString(fmt.Sprintf("Subject: %s\r\n", sanitizeHeader(subject)))
 	if inReplyTo != "" {
 		headers.WriteString(fmt.Sprintf("In-Reply-To: %s\r\n", sanitizeHeader(inReplyTo)))
@@ -269,7 +281,7 @@ func ensureReplySubject(subject string) string {
 
 // CreateDraft creates a new draft email with automatic HTML detection
 // If inReplyTo is provided (a message ID), threading headers are auto-fetched
-func (s *Service) CreateDraft(ctx context.Context, to, subject, body, inReplyTo string) (*gmail.Draft, error) {
+func (s *Service) CreateDraft(ctx context.Context, to, subject, body, inReplyTo, cc, bcc string) (*gmail.Draft, error) {
 	if to == "" {
 		return nil, fmt.Errorf("recipient address (to) cannot be empty")
 	}
@@ -298,9 +310,9 @@ func (s *Service) CreateDraft(ctx context.Context, to, subject, body, inReplyTo 
 
 	var message string
 	if isHTML(body) {
-		message = buildHTMLMessage(to, subject, body, inReplyToHeader, referencesHeader)
+		message = buildHTMLMessage(to, cc, bcc, subject, body, inReplyToHeader, referencesHeader)
 	} else {
-		message = buildPlainTextMessage(to, subject, body, inReplyToHeader, referencesHeader)
+		message = buildPlainTextMessage(to, cc, bcc, subject, body, inReplyToHeader, referencesHeader)
 	}
 
 	encoded := base64.URLEncoding.EncodeToString([]byte(message))
