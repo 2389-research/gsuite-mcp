@@ -19,24 +19,24 @@ A Model Context Protocol (MCP) server that provides programmatic access to Googl
 
 ## Available Tools
 
-The server exposes 27 MCP tools organized by service:
+The server exposes 33 MCP tools: 27 service tools organized by API, plus 6 management tools for authentication and account handling.
 
-### Gmail Tools (7)
+### Gmail Tools (8)
 1. **gmail_list_messages** - Search and list Gmail messages
 2. **gmail_get_message** - Get a specific message by ID
 3. **gmail_send_message** - Send email messages
 4. **gmail_create_draft** - Create a draft email
 5. **gmail_send_draft** - Send an existing draft
 6. **gmail_modify_labels** - Add/remove labels from messages
-7. **gmail_delete_message** - Permanently delete a message
+7. **gmail_trash_message** - Move a message to trash
+8. **gmail_delete_message** - Permanently delete a message
 
-### Calendar Tools (6)
-8. **calendar_list_events** - List calendar events with time filtering
-9. **calendar_get_event** - Get a specific event by ID
-10. **calendar_create_event** - Create a new calendar event
-11. **calendar_update_event** - Update an existing event
-12. **calendar_delete_event** - Delete a calendar event
-13. **calendar_quick_add** - Quick add event using natural language
+### Calendar Tools (5)
+9. **calendar_list_events** - List calendar events with time filtering
+10. **calendar_get_event** - Get a specific event by ID
+11. **calendar_create_event** - Create a new calendar event
+12. **calendar_update_event** - Update an existing event
+13. **calendar_delete_event** - Delete a calendar event
 
 ### People/Contacts Tools (6)
 14. **people_list_contacts** - List contact information
@@ -55,6 +55,14 @@ The server exposes 27 MCP tools organized by service:
 25. **tasks_create_task** - Create a new task
 26. **tasks_update_task** - Update an existing task
 27. **tasks_delete_task** - Delete a task
+
+### Auth & Account Tools (6)
+28. **auth_status** - Check if OAuth authentication is valid
+29. **auth_info** - Get OAuth token metadata (expiry, scopes)
+30. **auth_init** - Start OAuth authentication flow
+31. **auth_complete** - Complete OAuth flow with authorization code
+32. **auth_revoke** - Delete cached OAuth token
+33. **accounts_list** - List all configured accounts and their status
 
 See [docs/usage.md](docs/usage.md) for detailed tool documentation and examples.
 
@@ -82,7 +90,7 @@ The server provides 10 workflow prompts for common tasks:
 
 ## MCP Resources
 
-The server exposes 11 dynamic resources:
+The server exposes 11 dynamic resources. Resources always use the default account.
 
 1. **gsuite://calendar/today** - Today's calendar events
 2. **gsuite://calendar/this-week** - This week's calendar events
@@ -216,7 +224,7 @@ export ISH_USER=testuser
 ish server start --port 9000
 
 # Run the server
-./gsuite-mcp
+./gsuite-mcp mcp
 ```
 
 ## Technology Stack
@@ -267,14 +275,16 @@ Accounts are configured in `~/.config/gsuite-mcp/accounts.json`:
   "default": "work",
   "accounts": {
     "work": {
-      "token_path": "~/.local/share/gsuite-mcp/tokens/work.json"
+      "token_path": "/home/user/.local/share/gsuite-mcp/tokens/work.json"
     },
     "personal": {
-      "token_path": "~/.local/share/gsuite-mcp/tokens/personal.json"
+      "token_path": "/home/user/.local/share/gsuite-mcp/tokens/personal.json"
     }
   }
 }
 ```
+
+> **Note:** Use absolute paths. Tildes (`~`) are not expanded by the server.
 
 ### Setup via CLI
 
