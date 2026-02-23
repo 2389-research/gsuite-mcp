@@ -99,6 +99,27 @@ func (s *Server) registerPrompts() {
 		),
 		s.handleAddContactFromEmailPrompt,
 	)
+
+	// Task review prompt
+	s.mcp.AddPrompt(
+		mcp.NewPrompt(
+			"task_review",
+			mcp.WithPromptDescription("Review and organize pending tasks across all task lists"),
+			mcp.WithArgument("focus", mcp.ArgumentDescription("Area to focus on (e.g., 'overdue', 'today', 'this week')")),
+		),
+		s.handleTaskReviewPrompt,
+	)
+
+	// Plan tasks prompt
+	s.mcp.AddPrompt(
+		mcp.NewPrompt(
+			"plan_tasks",
+			mcp.WithPromptDescription("Break down a goal into actionable tasks"),
+			mcp.WithArgument("goal", mcp.ArgumentDescription("The goal to break down into tasks"), mcp.RequiredArgument()),
+			mcp.WithArgument("tasklist", mcp.ArgumentDescription("Task list to add tasks to (default: primary list)")),
+		),
+		s.handlePlanTasksPrompt,
+	)
 }
 
 // Prompt handlers
@@ -589,4 +610,101 @@ Let me start by finding and reading the email...`, searchQuery)
 	}
 
 	return mcp.NewGetPromptResult("Contact extraction and CRM workflow assistant", messages), nil
+}
+
+func (s *Server) handleTaskReviewPrompt(ctx context.Context, request mcp.GetPromptRequest) (*mcp.GetPromptResult, error) {
+	focus := "all pending"
+	if request.Params.Arguments != nil {
+		if f, ok := request.Params.Arguments["focus"]; ok && f != "" {
+			focus = f
+		}
+	}
+
+	promptText := fmt.Sprintf(`I'll help you review and organize your tasks. Focus area: **%s**
+
+**Task Review Plan:**
+1. **List all task lists** using tasks_list_tasklists to get an overview
+2. **Fetch tasks** from each list using tasks_list_tasks with appropriate filters:
+   - Overdue tasks (due before today)
+   - Tasks due today
+   - Tasks due this week
+   - Tasks with no due date
+3. **Categorize and prioritize**:
+   - **Urgent**: Overdue or due today
+   - **Soon**: Due within the next 3 days
+   - **Planned**: Due this week or later
+   - **Unscheduled**: No due date set
+4. **Suggest actions**:
+   - Reschedule overdue tasks with realistic due dates
+   - Break down large tasks into subtasks
+   - Archive or delete completed/irrelevant tasks
+   - Set due dates on unscheduled tasks
+5. **Summary**:
+   - Total tasks across all lists
+   - How many are overdue
+   - Workload for today and this week
+
+Let me start by fetching your task lists...`, focus)
+
+	messages := []mcp.PromptMessage{
+		mcp.NewPromptMessage(mcp.RoleUser, mcp.NewTextContent(promptText)),
+	}
+
+	return mcp.NewGetPromptResult("Task review and organization assistant", messages), nil
+}
+
+func (s *Server) handlePlanTasksPrompt(ctx context.Context, request mcp.GetPromptRequest) (*mcp.GetPromptResult, error) {
+	goal := ""
+	tasklist := "your primary task list"
+
+	if request.Params.Arguments != nil {
+		if g, ok := request.Params.Arguments["goal"]; ok {
+			goal = g
+		}
+		if tl, ok := request.Params.Arguments["tasklist"]; ok && tl != "" {
+			tasklist = tl
+		}
+	}
+
+	if goal == "" {
+		return nil, fmt.Errorf("goal argument is required")
+	}
+
+	promptText := fmt.Sprintf(`I'll help you break down this goal into actionable tasks: **"%s"**
+
+**Target task list:** %s
+
+**Planning Process:**
+1. **Analyze the goal** and identify major milestones or phases
+2. **Break each milestone into concrete tasks** that are:
+   - Specific and clearly defined
+   - Achievable in a single work session (1-4 hours)
+   - Ordered by dependency (what must happen first)
+3. **For each task, define**:
+   - Clear title describing the action
+   - Notes with acceptance criteria or details
+   - Suggested due date based on dependencies and priority
+   - Parent task (for subtask grouping)
+4. **Create the tasks** using tasks_create_task with:
+   - Appropriate task list
+   - Title, notes, and due dates
+   - Parent-child relationships for subtasks
+5. **Review the plan**:
+   - Verify task order makes sense
+   - Check that due dates are realistic
+   - Ensure nothing is missed
+
+**Guidelines:**
+- Each task should start with an action verb (Create, Write, Review, Test, etc.)
+- Group related tasks under a parent task
+- Leave buffer time between dependent tasks
+- Include a final "Review and verify" task
+
+Let me analyze your goal and create a task breakdown...`, goal, tasklist)
+
+	messages := []mcp.PromptMessage{
+		mcp.NewPromptMessage(mcp.RoleUser, mcp.NewTextContent(promptText)),
+	}
+
+	return mcp.NewGetPromptResult("Goal breakdown and task planning assistant", messages), nil
 }

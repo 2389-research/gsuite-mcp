@@ -178,6 +178,28 @@ func TestMCPPromptListingAndExecution(t *testing.T) {
 			expectError:   true,
 			errorContains: "required",
 		},
+		{
+			name:       "task_review_prompt",
+			promptName: "task_review",
+			args:       map[string]string{"focus": "overdue"},
+		},
+		{
+			name:       "task_review_prompt_default_focus",
+			promptName: "task_review",
+			args:       map[string]string{},
+		},
+		{
+			name:       "plan_tasks_prompt",
+			promptName: "plan_tasks",
+			args:       map[string]string{"goal": "Launch new website", "tasklist": "Work"},
+		},
+		{
+			name:          "plan_tasks_missing_goal",
+			promptName:    "plan_tasks",
+			args:          map[string]string{},
+			expectError:   true,
+			errorContains: "required",
+		},
 	}
 
 	for _, tt := range tests {
@@ -213,6 +235,10 @@ func TestMCPPromptListingAndExecution(t *testing.T) {
 				result, err = srv.handleEmailReplyPrompt(ctx, request)
 			case "add_contact_from_email":
 				result, err = srv.handleAddContactFromEmailPrompt(ctx, request)
+			case "task_review":
+				result, err = srv.handleTaskReviewPrompt(ctx, request)
+			case "plan_tasks":
+				result, err = srv.handlePlanTasksPrompt(ctx, request)
 			default:
 				t.Fatalf("Unknown prompt: %s", tt.promptName)
 			}
