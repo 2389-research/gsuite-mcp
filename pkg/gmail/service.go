@@ -216,19 +216,19 @@ func sanitizeHeader(value string) string {
 
 func buildPlainTextMessage(to, cc, bcc, subject, body, inReplyTo, references string) string {
 	var headers strings.Builder
-	headers.WriteString(fmt.Sprintf("To: %s\r\n", sanitizeHeader(to)))
+	fmt.Fprintf(&headers, "To: %s\r\n", sanitizeHeader(to))
 	if cc != "" {
-		headers.WriteString(fmt.Sprintf("Cc: %s\r\n", sanitizeHeader(cc)))
+		fmt.Fprintf(&headers, "Cc: %s\r\n", sanitizeHeader(cc))
 	}
 	if bcc != "" {
-		headers.WriteString(fmt.Sprintf("Bcc: %s\r\n", sanitizeHeader(bcc)))
+		fmt.Fprintf(&headers, "Bcc: %s\r\n", sanitizeHeader(bcc))
 	}
-	headers.WriteString(fmt.Sprintf("Subject: %s\r\n", sanitizeHeader(subject)))
+	fmt.Fprintf(&headers, "Subject: %s\r\n", sanitizeHeader(subject))
 	if inReplyTo != "" {
-		headers.WriteString(fmt.Sprintf("In-Reply-To: %s\r\n", sanitizeHeader(inReplyTo)))
+		fmt.Fprintf(&headers, "In-Reply-To: %s\r\n", sanitizeHeader(inReplyTo))
 	}
 	if references != "" {
-		headers.WriteString(fmt.Sprintf("References: %s\r\n", sanitizeHeader(references)))
+		fmt.Fprintf(&headers, "References: %s\r\n", sanitizeHeader(references))
 	}
 	headers.WriteString("Content-Type: text/plain; charset=\"UTF-8\"\r\n")
 	headers.WriteString("MIME-Version: 1.0\r\n")
@@ -239,19 +239,19 @@ func buildPlainTextMessage(to, cc, bcc, subject, body, inReplyTo, references str
 
 func buildHTMLMessage(to, cc, bcc, subject, body, inReplyTo, references string) string {
 	var headers strings.Builder
-	headers.WriteString(fmt.Sprintf("To: %s\r\n", sanitizeHeader(to)))
+	fmt.Fprintf(&headers, "To: %s\r\n", sanitizeHeader(to))
 	if cc != "" {
-		headers.WriteString(fmt.Sprintf("Cc: %s\r\n", sanitizeHeader(cc)))
+		fmt.Fprintf(&headers, "Cc: %s\r\n", sanitizeHeader(cc))
 	}
 	if bcc != "" {
-		headers.WriteString(fmt.Sprintf("Bcc: %s\r\n", sanitizeHeader(bcc)))
+		fmt.Fprintf(&headers, "Bcc: %s\r\n", sanitizeHeader(bcc))
 	}
-	headers.WriteString(fmt.Sprintf("Subject: %s\r\n", sanitizeHeader(subject)))
+	fmt.Fprintf(&headers, "Subject: %s\r\n", sanitizeHeader(subject))
 	if inReplyTo != "" {
-		headers.WriteString(fmt.Sprintf("In-Reply-To: %s\r\n", sanitizeHeader(inReplyTo)))
+		fmt.Fprintf(&headers, "In-Reply-To: %s\r\n", sanitizeHeader(inReplyTo))
 	}
 	if references != "" {
-		headers.WriteString(fmt.Sprintf("References: %s\r\n", sanitizeHeader(references)))
+		fmt.Fprintf(&headers, "References: %s\r\n", sanitizeHeader(references))
 	}
 	headers.WriteString("Content-Type: text/html; charset=\"UTF-8\"\r\n")
 	headers.WriteString("MIME-Version: 1.0\r\n")

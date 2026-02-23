@@ -16,13 +16,13 @@ import (
 func TestLoadRegistry_FromFile(t *testing.T) {
 	dir := t.TempDir()
 	configPath := filepath.Join(dir, "accounts.json")
-	os.WriteFile(configPath, []byte(`{
+	require.NoError(t, os.WriteFile(configPath, []byte(`{
 		"default": "work",
 		"accounts": {
 			"work": {"token_path": "/tmp/work.json"},
 			"personal": {"token_path": "/tmp/personal.json"}
 		}
-	}`), 0600)
+	}`), 0600))
 
 	reg, err := LoadRegistry(configPath)
 	require.NoError(t, err)
@@ -177,12 +177,12 @@ func TestRegistry_AddAccount_RejectsDuplicate(t *testing.T) {
 func TestLoadRegistry_InvalidDefaultAlias(t *testing.T) {
 	dir := t.TempDir()
 	configPath := filepath.Join(dir, "accounts.json")
-	os.WriteFile(configPath, []byte(`{
+	require.NoError(t, os.WriteFile(configPath, []byte(`{
 		"default": "nonexistent",
 		"accounts": {
 			"work": {"token_path": "/tmp/work.json"}
 		}
-	}`), 0600)
+	}`), 0600))
 
 	_, err := LoadRegistry(configPath)
 	require.Error(t, err)
@@ -192,12 +192,12 @@ func TestLoadRegistry_InvalidDefaultAlias(t *testing.T) {
 func TestLoadRegistry_InvalidAliasInConfig(t *testing.T) {
 	dir := t.TempDir()
 	configPath := filepath.Join(dir, "accounts.json")
-	os.WriteFile(configPath, []byte(`{
+	require.NoError(t, os.WriteFile(configPath, []byte(`{
 		"default": "../../evil",
 		"accounts": {
 			"../../evil": {"token_path": "/tmp/evil.json"}
 		}
-	}`), 0600)
+	}`), 0600))
 
 	_, err := LoadRegistry(configPath)
 	require.Error(t, err)
