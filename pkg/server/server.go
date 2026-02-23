@@ -13,6 +13,7 @@ import (
 	"strings"
 	"time"
 
+	"github.com/harper/gsuite-mcp/pkg/accounts"
 	"github.com/harper/gsuite-mcp/pkg/auth"
 	"github.com/harper/gsuite-mcp/pkg/calendar"
 	"github.com/harper/gsuite-mcp/pkg/gmail"
@@ -26,12 +27,18 @@ import (
 	googletasks "google.golang.org/api/tasks/v1"
 )
 
+// AccountServices holds all Google service instances for a single account
+type AccountServices struct {
+	Gmail    *gmail.Service
+	Calendar *calendar.Service
+	People   *people.Service
+	Tasks    *tasks.Service
+}
+
 // Server is the MCP server for GSuite APIs
 type Server struct {
-	gmail    *gmail.Service
-	calendar *calendar.Service
-	people   *people.Service
-	tasks    *tasks.Service
+	registry *accounts.Registry
+	services map[string]*AccountServices
 	mcp      *server.MCPServer
 	auth     *auth.Authenticator // For auth management tools
 }
@@ -40,10 +47,18 @@ type Server struct {
 func NewServer(ctx context.Context) (*Server, error) {
 	var client *http.Client
 	var authenticator *auth.Authenticator
+	var registry *accounts.Registry
 
 	// Check for ish mode
 	if os.Getenv("ISH_MODE") == "true" {
 		client = auth.NewFakeClient("")
+		// Build an in-memory registry with a single "default" account
+		registry = &accounts.Registry{
+			DefaultAlias: "default",
+			Accounts: map[string]*accounts.Account{
+				"default": {Alias: "default", Client: client},
+			},
+		}
 	} else {
 		// Use real OAuth
 		var err error
@@ -61,35 +76,38 @@ func NewServer(ctx context.Context) (*Server, error) {
 		if client == nil {
 			client = &http.Client{}
 		}
-	}
 
-	// Create services
-	gmailSvc, err := gmail.NewService(ctx, client)
-	if err != nil {
-		return nil, fmt.Errorf("failed to create Gmail service: %w", err)
-	}
+		// Load account registry from config file
+		registry, err = accounts.LoadRegistry(auth.GetAccountsConfigPath())
+		if err != nil {
+			return nil, fmt.Errorf("failed to load accounts registry: %w", err)
+		}
 
-	calendarSvc, err := calendar.NewService(ctx, client)
-	if err != nil {
-		return nil, fmt.Errorf("failed to create Calendar service: %w", err)
-	}
-
-	peopleSvc, err := people.NewService(ctx, client)
-	if err != nil {
-		return nil, fmt.Errorf("failed to create People service: %w", err)
-	}
-
-	tasksSvc, err := tasks.NewService(ctx, client)
-	if err != nil {
-		return nil, fmt.Errorf("failed to create Tasks service: %w", err)
+		// Attach the authenticated client to the default account
+		defaultAcct, err := registry.GetDefault()
+		if err != nil {
+			return nil, fmt.Errorf("failed to get default account: %w", err)
+		}
+		defaultAcct.Client = client
 	}
 
 	s := &Server{
-		gmail:    gmailSvc,
-		calendar: calendarSvc,
-		people:   peopleSvc,
-		tasks:    tasksSvc,
+		registry: registry,
+		services: make(map[string]*AccountServices),
 		auth:     authenticator,
+	}
+
+	// Eagerly create services for the default account
+	defaultAcct, err := registry.GetDefault()
+	if err != nil {
+		return nil, fmt.Errorf("failed to get default account: %w", err)
+	}
+	defaultClient := defaultAcct.Client
+	if defaultClient == nil {
+		defaultClient = &http.Client{}
+	}
+	if _, err := s.createServicesForClient(ctx, defaultAcct.Alias, defaultClient); err != nil {
+		return nil, fmt.Errorf("failed to create services for default account: %w", err)
 	}
 
 	// Create MCP server
@@ -105,6 +123,57 @@ func NewServer(ctx context.Context) (*Server, error) {
 	s.registerResources()
 
 	return s, nil
+}
+
+// resolveServices returns the AccountServices for the given alias, creating them
+// lazily if they don't already exist. An empty alias resolves to the default account.
+func (s *Server) resolveServices(ctx context.Context, alias string) (*AccountServices, error) {
+	acct, err := s.registry.Resolve(alias)
+	if err != nil {
+		return nil, err
+	}
+
+	if svc, ok := s.services[acct.Alias]; ok {
+		return svc, nil
+	}
+
+	// Lazy init: create services for this account
+	client := acct.Client
+	if client == nil {
+		client = &http.Client{}
+	}
+
+	return s.createServicesForClient(ctx, acct.Alias, client)
+}
+
+// createServicesForClient builds AccountServices for the given alias/client and
+// caches them in the services map.
+func (s *Server) createServicesForClient(ctx context.Context, alias string, client *http.Client) (*AccountServices, error) {
+	gmailSvc, err := gmail.NewService(ctx, client)
+	if err != nil {
+		return nil, fmt.Errorf("failed to create Gmail service for account '%s': %w", alias, err)
+	}
+	calendarSvc, err := calendar.NewService(ctx, client)
+	if err != nil {
+		return nil, fmt.Errorf("failed to create Calendar service for account '%s': %w", alias, err)
+	}
+	peopleSvc, err := people.NewService(ctx, client)
+	if err != nil {
+		return nil, fmt.Errorf("failed to create People service for account '%s': %w", alias, err)
+	}
+	tasksSvc, err := tasks.NewService(ctx, client)
+	if err != nil {
+		return nil, fmt.Errorf("failed to create Tasks service for account '%s': %w", alias, err)
+	}
+
+	svc := &AccountServices{
+		Gmail:    gmailSvc,
+		Calendar: calendarSvc,
+		People:   peopleSvc,
+		Tasks:    tasksSvc,
+	}
+	s.services[alias] = svc
+	return svc, nil
 }
 
 // registerTools registers all available tools
@@ -256,6 +325,7 @@ func (s *Server) registerTools() {
 					"type":        "string",
 					"description": "Visibility in message list: show, hide",
 				},
+				"account": map[string]string{"type": "string", "description": "Account alias (e.g., 'work', 'personal'). Uses default if not specified."},
 			},
 			Required: []string{"action"},
 		},
@@ -675,11 +745,16 @@ type ListTasksResponse struct {
 
 // Tool handlers
 func (s *Server) handleGmailListMessages(ctx context.Context, request mcp.CallToolRequest) (*mcp.CallToolResult, error) {
+	svc, err := s.resolveServices(ctx, "")
+	if err != nil {
+		return mcp.NewToolResultError(err.Error()), nil
+	}
+
 	query := request.GetString("query", "")
 	maxResults := int64(request.GetInt("max_results", 100))
 	hydrate := request.GetBool("hydrate", false)
 
-	messages, err := s.gmail.ListMessages(ctx, query, maxResults)
+	messages, err := svc.Gmail.ListMessages(ctx, query, maxResults)
 	if err != nil {
 		return mcp.NewToolResultError(err.Error()), nil
 	}
@@ -702,7 +777,7 @@ func (s *Server) handleGmailListMessages(ctx context.Context, request mcp.CallTo
 	// Hydrate: fetch full details for each message
 	hydrated := make([]HydratedMessage, 0, len(messages))
 	for _, msg := range messages {
-		fullMsg, err := s.gmail.GetMessage(ctx, msg.Id)
+		fullMsg, err := svc.Gmail.GetMessage(ctx, msg.Id)
 		if err != nil {
 			// If we can't get one message, include basic info and continue
 			hydrated = append(hydrated, HydratedMessage{
@@ -745,12 +820,17 @@ func (s *Server) handleGmailListMessages(ctx context.Context, request mcp.CallTo
 }
 
 func (s *Server) handleGmailGetMessage(ctx context.Context, request mcp.CallToolRequest) (*mcp.CallToolResult, error) {
+	svc, err := s.resolveServices(ctx, "")
+	if err != nil {
+		return mcp.NewToolResultError(err.Error()), nil
+	}
+
 	messageID, err := request.RequireString("message_id")
 	if err != nil {
 		return mcp.NewToolResultError(err.Error()), nil
 	}
 
-	msg, err := s.gmail.GetMessage(ctx, messageID)
+	msg, err := svc.Gmail.GetMessage(ctx, messageID)
 	if err != nil {
 		return mcp.NewToolResultError(err.Error()), nil
 	}
@@ -759,6 +839,11 @@ func (s *Server) handleGmailGetMessage(ctx context.Context, request mcp.CallTool
 }
 
 func (s *Server) handleGmailSendMessage(ctx context.Context, request mcp.CallToolRequest) (*mcp.CallToolResult, error) {
+	svc, err := s.resolveServices(ctx, "")
+	if err != nil {
+		return mcp.NewToolResultError(err.Error()), nil
+	}
+
 	to, err := request.RequireString("to")
 	if err != nil {
 		return mcp.NewToolResultError(err.Error()), nil
@@ -778,7 +863,7 @@ func (s *Server) handleGmailSendMessage(ctx context.Context, request mcp.CallToo
 	cc := request.GetString("cc", "")
 	bcc := request.GetString("bcc", "")
 
-	msg, err := s.gmail.SendMessage(ctx, to, subject, body, inReplyTo, cc, bcc)
+	msg, err := svc.Gmail.SendMessage(ctx, to, subject, body, inReplyTo, cc, bcc)
 	if err != nil {
 		return mcp.NewToolResultError(err.Error()), nil
 	}
@@ -787,6 +872,11 @@ func (s *Server) handleGmailSendMessage(ctx context.Context, request mcp.CallToo
 }
 
 func (s *Server) handleGmailCreateDraft(ctx context.Context, request mcp.CallToolRequest) (*mcp.CallToolResult, error) {
+	svc, err := s.resolveServices(ctx, "")
+	if err != nil {
+		return mcp.NewToolResultError(err.Error()), nil
+	}
+
 	to, err := request.RequireString("to")
 	if err != nil {
 		return mcp.NewToolResultError(err.Error()), nil
@@ -806,7 +896,7 @@ func (s *Server) handleGmailCreateDraft(ctx context.Context, request mcp.CallToo
 	cc := request.GetString("cc", "")
 	bcc := request.GetString("bcc", "")
 
-	draft, err := s.gmail.CreateDraft(ctx, to, subject, body, inReplyTo, cc, bcc)
+	draft, err := svc.Gmail.CreateDraft(ctx, to, subject, body, inReplyTo, cc, bcc)
 	if err != nil {
 		return mcp.NewToolResultError(err.Error()), nil
 	}
@@ -815,12 +905,17 @@ func (s *Server) handleGmailCreateDraft(ctx context.Context, request mcp.CallToo
 }
 
 func (s *Server) handleGmailSendDraft(ctx context.Context, request mcp.CallToolRequest) (*mcp.CallToolResult, error) {
+	svc, err := s.resolveServices(ctx, "")
+	if err != nil {
+		return mcp.NewToolResultError(err.Error()), nil
+	}
+
 	draftID, err := request.RequireString("draft_id")
 	if err != nil {
 		return mcp.NewToolResultError(err.Error()), nil
 	}
 
-	msg, err := s.gmail.SendDraft(ctx, draftID)
+	msg, err := svc.Gmail.SendDraft(ctx, draftID)
 	if err != nil {
 		return mcp.NewToolResultError(err.Error()), nil
 	}
@@ -829,6 +924,11 @@ func (s *Server) handleGmailSendDraft(ctx context.Context, request mcp.CallToolR
 }
 
 func (s *Server) handleGmailModifyLabels(ctx context.Context, request mcp.CallToolRequest) (*mcp.CallToolResult, error) {
+	svc, err := s.resolveServices(ctx, "")
+	if err != nil {
+		return mcp.NewToolResultError(err.Error()), nil
+	}
+
 	messageID, err := request.RequireString("message_id")
 	if err != nil {
 		return mcp.NewToolResultError(err.Error()), nil
@@ -866,7 +966,7 @@ func (s *Server) handleGmailModifyLabels(ctx context.Context, request mcp.CallTo
 		}
 	}
 
-	modified, err := s.gmail.ModifyLabels(ctx, messageID, addLabels, removeLabels)
+	modified, err := svc.Gmail.ModifyLabels(ctx, messageID, addLabels, removeLabels)
 	if err != nil {
 		return mcp.NewToolResultError(err.Error()), nil
 	}
@@ -875,12 +975,17 @@ func (s *Server) handleGmailModifyLabels(ctx context.Context, request mcp.CallTo
 }
 
 func (s *Server) handleGmailTrashMessage(ctx context.Context, request mcp.CallToolRequest) (*mcp.CallToolResult, error) {
+	svc, err := s.resolveServices(ctx, "")
+	if err != nil {
+		return mcp.NewToolResultError(err.Error()), nil
+	}
+
 	messageID, err := request.RequireString("message_id")
 	if err != nil {
 		return mcp.NewToolResultError(err.Error()), nil
 	}
 
-	trashed, err := s.gmail.TrashMessage(ctx, messageID)
+	trashed, err := svc.Gmail.TrashMessage(ctx, messageID)
 	if err != nil {
 		return mcp.NewToolResultError(err.Error()), nil
 	}
@@ -889,12 +994,17 @@ func (s *Server) handleGmailTrashMessage(ctx context.Context, request mcp.CallTo
 }
 
 func (s *Server) handleGmailDeleteMessage(ctx context.Context, request mcp.CallToolRequest) (*mcp.CallToolResult, error) {
+	svc, err := s.resolveServices(ctx, "")
+	if err != nil {
+		return mcp.NewToolResultError(err.Error()), nil
+	}
+
 	messageID, err := request.RequireString("message_id")
 	if err != nil {
 		return mcp.NewToolResultError(err.Error()), nil
 	}
 
-	err = s.gmail.DeleteMessage(ctx, messageID)
+	err = svc.Gmail.DeleteMessage(ctx, messageID)
 	if err != nil {
 		return mcp.NewToolResultError(err.Error()), nil
 	}
@@ -919,6 +1029,12 @@ type ManageLabelsResponse struct {
 }
 
 func (s *Server) handleGmailManageLabels(ctx context.Context, request mcp.CallToolRequest) (*mcp.CallToolResult, error) {
+	account := request.GetString("account", "")
+	svc, err := s.resolveServices(ctx, account)
+	if err != nil {
+		return mcp.NewToolResultError(err.Error()), nil
+	}
+
 	action, err := request.RequireString("action")
 	if err != nil {
 		return mcp.NewToolResultError("action is required. Valid actions: list, get, create, update, delete"), nil
@@ -926,7 +1042,7 @@ func (s *Server) handleGmailManageLabels(ctx context.Context, request mcp.CallTo
 
 	switch action {
 	case "list":
-		labels, err := s.gmail.ListLabels(ctx)
+		labels, err := svc.Gmail.ListLabels(ctx)
 		if err != nil {
 			return mcp.NewToolResultError(err.Error()), nil
 		}
@@ -952,7 +1068,7 @@ func (s *Server) handleGmailManageLabels(ctx context.Context, request mcp.CallTo
 			return mcp.NewToolResultError("label_id is required for get action. Use action: list to see available labels."), nil
 		}
 
-		label, err := s.gmail.GetLabel(ctx, labelID)
+		label, err := svc.Gmail.GetLabel(ctx, labelID)
 		if err != nil {
 			return mcp.NewToolResultError(fmt.Sprintf("label not found: %v. Use action: list to see available labels.", err)), nil
 		}
@@ -975,7 +1091,7 @@ func (s *Server) handleGmailManageLabels(ctx context.Context, request mcp.CallTo
 		labelListVisibility := request.GetString("label_list_visibility", "")
 		messageListVisibility := request.GetString("message_list_visibility", "")
 
-		label, err := s.gmail.CreateLabel(ctx, name, labelListVisibility, messageListVisibility)
+		label, err := svc.Gmail.CreateLabel(ctx, name, labelListVisibility, messageListVisibility)
 		if err != nil {
 			return mcp.NewToolResultError(fmt.Sprintf("failed to create label: %v", err)), nil
 		}
@@ -1000,7 +1116,7 @@ func (s *Server) handleGmailManageLabels(ctx context.Context, request mcp.CallTo
 			return mcp.NewToolResultError("at least one of name, label_list_visibility, or message_list_visibility must be provided for update"), nil
 		}
 
-		label, err := s.gmail.UpdateLabel(ctx, labelID, name, labelListVisibility, messageListVisibility)
+		label, err := svc.Gmail.UpdateLabel(ctx, labelID, name, labelListVisibility, messageListVisibility)
 		if err != nil {
 			if strings.Contains(err.Error(), "systemLabelCannotBeUpdated") {
 				return mcp.NewToolResultError("system labels (INBOX, SENT, etc.) cannot be updated. Only user-created labels can be modified."), nil
@@ -1020,7 +1136,7 @@ func (s *Server) handleGmailManageLabels(ctx context.Context, request mcp.CallTo
 			return mcp.NewToolResultError("label_id is required for delete action. Use action: list to see available labels."), nil
 		}
 
-		err := s.gmail.DeleteLabel(ctx, labelID)
+		err := svc.Gmail.DeleteLabel(ctx, labelID)
 		if err != nil {
 			if strings.Contains(err.Error(), "systemLabelCannotBeDeleted") {
 				return mcp.NewToolResultError("system labels (INBOX, SENT, etc.) cannot be deleted. Only user-created labels can be deleted."), nil
@@ -1039,6 +1155,11 @@ func (s *Server) handleGmailManageLabels(ctx context.Context, request mcp.CallTo
 }
 
 func (s *Server) handleCalendarListEvents(ctx context.Context, request mcp.CallToolRequest) (*mcp.CallToolResult, error) {
+	svc, err := s.resolveServices(ctx, "")
+	if err != nil {
+		return mcp.NewToolResultError(err.Error()), nil
+	}
+
 	maxResults := int64(request.GetInt("max_results", 100))
 
 	var timeMin, timeMax time.Time
@@ -1058,7 +1179,7 @@ func (s *Server) handleCalendarListEvents(ctx context.Context, request mcp.CallT
 		timeMax = parsed
 	}
 
-	events, err := s.calendar.ListEvents(ctx, maxResults, timeMin, timeMax)
+	events, err := svc.Calendar.ListEvents(ctx, maxResults, timeMin, timeMax)
 	if err != nil {
 		return mcp.NewToolResultError(err.Error()), nil
 	}
@@ -1070,12 +1191,17 @@ func (s *Server) handleCalendarListEvents(ctx context.Context, request mcp.CallT
 }
 
 func (s *Server) handleCalendarGetEvent(ctx context.Context, request mcp.CallToolRequest) (*mcp.CallToolResult, error) {
+	svc, err := s.resolveServices(ctx, "")
+	if err != nil {
+		return mcp.NewToolResultError(err.Error()), nil
+	}
+
 	eventID, err := request.RequireString("event_id")
 	if err != nil {
 		return mcp.NewToolResultError(err.Error()), nil
 	}
 
-	event, err := s.calendar.GetEvent(ctx, eventID)
+	event, err := svc.Calendar.GetEvent(ctx, eventID)
 	if err != nil {
 		return mcp.NewToolResultError(err.Error()), nil
 	}
@@ -1084,6 +1210,11 @@ func (s *Server) handleCalendarGetEvent(ctx context.Context, request mcp.CallToo
 }
 
 func (s *Server) handleCalendarCreateEvent(ctx context.Context, request mcp.CallToolRequest) (*mcp.CallToolResult, error) {
+	svc, err := s.resolveServices(ctx, "")
+	if err != nil {
+		return mcp.NewToolResultError(err.Error()), nil
+	}
+
 	summary, err := request.RequireString("summary")
 	if err != nil {
 		return mcp.NewToolResultError(err.Error()), nil
@@ -1116,7 +1247,7 @@ func (s *Server) handleCalendarCreateEvent(ctx context.Context, request mcp.Call
 	optionalAttendees := request.GetStringSlice("optional_attendees", []string{})
 	sendNotifications := request.GetBool("send_notifications", true)
 
-	event, err := s.calendar.CreateEvent(ctx, summary, description, startTime, endTime, attendees, optionalAttendees, sendNotifications)
+	event, err := svc.Calendar.CreateEvent(ctx, summary, description, startTime, endTime, attendees, optionalAttendees, sendNotifications)
 	if err != nil {
 		return mcp.NewToolResultError(err.Error()), nil
 	}
@@ -1125,6 +1256,11 @@ func (s *Server) handleCalendarCreateEvent(ctx context.Context, request mcp.Call
 }
 
 func (s *Server) handleCalendarUpdateEvent(ctx context.Context, request mcp.CallToolRequest) (*mcp.CallToolResult, error) {
+	svc, err := s.resolveServices(ctx, "")
+	if err != nil {
+		return mcp.NewToolResultError(err.Error()), nil
+	}
+
 	eventID, err := request.RequireString("event_id")
 	if err != nil {
 		return mcp.NewToolResultError(err.Error()), nil
@@ -1147,7 +1283,7 @@ func (s *Server) handleCalendarUpdateEvent(ctx context.Context, request mcp.Call
 	}
 
 	// Get existing event
-	event, err := s.calendar.GetEvent(ctx, eventID)
+	event, err := svc.Calendar.GetEvent(ctx, eventID)
 	if err != nil {
 		return mcp.NewToolResultError(err.Error()), nil
 	}
@@ -1282,7 +1418,7 @@ func (s *Server) handleCalendarUpdateEvent(ctx context.Context, request mcp.Call
 	// Get send_notifications parameter (defaults to true)
 	sendNotifications := request.GetBool("send_notifications", true)
 
-	updated, err := s.calendar.UpdateEvent(ctx, eventID, event, sendNotifications)
+	updated, err := svc.Calendar.UpdateEvent(ctx, eventID, event, sendNotifications)
 	if err != nil {
 		return mcp.NewToolResultError(err.Error()), nil
 	}
@@ -1291,12 +1427,17 @@ func (s *Server) handleCalendarUpdateEvent(ctx context.Context, request mcp.Call
 }
 
 func (s *Server) handleCalendarDeleteEvent(ctx context.Context, request mcp.CallToolRequest) (*mcp.CallToolResult, error) {
+	svc, err := s.resolveServices(ctx, "")
+	if err != nil {
+		return mcp.NewToolResultError(err.Error()), nil
+	}
+
 	eventID, err := request.RequireString("event_id")
 	if err != nil {
 		return mcp.NewToolResultError(err.Error()), nil
 	}
 
-	err = s.calendar.DeleteEvent(ctx, eventID)
+	err = svc.Calendar.DeleteEvent(ctx, eventID)
 	if err != nil {
 		return mcp.NewToolResultError(err.Error()), nil
 	}
@@ -1305,9 +1446,14 @@ func (s *Server) handleCalendarDeleteEvent(ctx context.Context, request mcp.Call
 }
 
 func (s *Server) handlePeopleListContacts(ctx context.Context, request mcp.CallToolRequest) (*mcp.CallToolResult, error) {
+	svc, err := s.resolveServices(ctx, "")
+	if err != nil {
+		return mcp.NewToolResultError(err.Error()), nil
+	}
+
 	pageSize := int64(request.GetInt("page_size", 100))
 
-	contacts, err := s.people.ListContacts(ctx, pageSize)
+	contacts, err := svc.People.ListContacts(ctx, pageSize)
 	if err != nil {
 		return mcp.NewToolResultError(err.Error()), nil
 	}
@@ -1319,6 +1465,11 @@ func (s *Server) handlePeopleListContacts(ctx context.Context, request mcp.CallT
 }
 
 func (s *Server) handlePeopleSearchContacts(ctx context.Context, request mcp.CallToolRequest) (*mcp.CallToolResult, error) {
+	svc, err := s.resolveServices(ctx, "")
+	if err != nil {
+		return mcp.NewToolResultError(err.Error()), nil
+	}
+
 	query, err := request.RequireString("query")
 	if err != nil {
 		return mcp.NewToolResultError(err.Error()), nil
@@ -1326,7 +1477,7 @@ func (s *Server) handlePeopleSearchContacts(ctx context.Context, request mcp.Cal
 
 	pageSize := int64(request.GetInt("page_size", 10))
 
-	contacts, err := s.people.SearchContacts(ctx, query, pageSize)
+	contacts, err := svc.People.SearchContacts(ctx, query, pageSize)
 	if err != nil {
 		return mcp.NewToolResultError(err.Error()), nil
 	}
@@ -1338,12 +1489,17 @@ func (s *Server) handlePeopleSearchContacts(ctx context.Context, request mcp.Cal
 }
 
 func (s *Server) handlePeopleGetContact(ctx context.Context, request mcp.CallToolRequest) (*mcp.CallToolResult, error) {
+	svc, err := s.resolveServices(ctx, "")
+	if err != nil {
+		return mcp.NewToolResultError(err.Error()), nil
+	}
+
 	resourceName, err := request.RequireString("resource_name")
 	if err != nil {
 		return mcp.NewToolResultError(err.Error()), nil
 	}
 
-	person, err := s.people.GetPerson(ctx, resourceName)
+	person, err := svc.People.GetPerson(ctx, resourceName)
 	if err != nil {
 		return mcp.NewToolResultError(err.Error()), nil
 	}
@@ -1352,6 +1508,11 @@ func (s *Server) handlePeopleGetContact(ctx context.Context, request mcp.CallToo
 }
 
 func (s *Server) handlePeopleCreateContact(ctx context.Context, request mcp.CallToolRequest) (*mcp.CallToolResult, error) {
+	svc, err := s.resolveServices(ctx, "")
+	if err != nil {
+		return mcp.NewToolResultError(err.Error()), nil
+	}
+
 	givenName, err := request.RequireString("given_name")
 	if err != nil {
 		return mcp.NewToolResultError(err.Error()), nil
@@ -1383,7 +1544,7 @@ func (s *Server) handlePeopleCreateContact(ctx context.Context, request mcp.Call
 		}
 	}
 
-	created, err := s.people.CreateContact(ctx, person)
+	created, err := svc.People.CreateContact(ctx, person)
 	if err != nil {
 		return mcp.NewToolResultError(err.Error()), nil
 	}
@@ -1392,13 +1553,18 @@ func (s *Server) handlePeopleCreateContact(ctx context.Context, request mcp.Call
 }
 
 func (s *Server) handlePeopleUpdateContact(ctx context.Context, request mcp.CallToolRequest) (*mcp.CallToolResult, error) {
+	svc, err := s.resolveServices(ctx, "")
+	if err != nil {
+		return mcp.NewToolResultError(err.Error()), nil
+	}
+
 	resourceName, err := request.RequireString("resource_name")
 	if err != nil {
 		return mcp.NewToolResultError(err.Error()), nil
 	}
 
 	// Get existing contact first
-	person, err := s.people.GetPerson(ctx, resourceName)
+	person, err := svc.People.GetPerson(ctx, resourceName)
 	if err != nil {
 		return mcp.NewToolResultError(err.Error()), nil
 	}
@@ -1450,7 +1616,7 @@ func (s *Server) handlePeopleUpdateContact(ctx context.Context, request mcp.Call
 	// Build update mask
 	updateMask := strings.Join(updateFields, ",")
 
-	updated, err := s.people.UpdateContact(ctx, resourceName, person, updateMask)
+	updated, err := svc.People.UpdateContact(ctx, resourceName, person, updateMask)
 	if err != nil {
 		return mcp.NewToolResultError(err.Error()), nil
 	}
@@ -1459,12 +1625,17 @@ func (s *Server) handlePeopleUpdateContact(ctx context.Context, request mcp.Call
 }
 
 func (s *Server) handlePeopleDeleteContact(ctx context.Context, request mcp.CallToolRequest) (*mcp.CallToolResult, error) {
+	svc, err := s.resolveServices(ctx, "")
+	if err != nil {
+		return mcp.NewToolResultError(err.Error()), nil
+	}
+
 	resourceName, err := request.RequireString("resource_name")
 	if err != nil {
 		return mcp.NewToolResultError(err.Error()), nil
 	}
 
-	err = s.people.DeleteContact(ctx, resourceName)
+	err = svc.People.DeleteContact(ctx, resourceName)
 	if err != nil {
 		return mcp.NewToolResultError(err.Error()), nil
 	}
@@ -1475,7 +1646,12 @@ func (s *Server) handlePeopleDeleteContact(ctx context.Context, request mcp.Call
 // Tasks tool handlers
 
 func (s *Server) handleTasksListTaskLists(ctx context.Context, request mcp.CallToolRequest) (*mcp.CallToolResult, error) {
-	taskLists, err := s.tasks.ListTaskLists(ctx)
+	svc, err := s.resolveServices(ctx, "")
+	if err != nil {
+		return mcp.NewToolResultError(err.Error()), nil
+	}
+
+	taskLists, err := svc.Tasks.ListTaskLists(ctx)
 	if err != nil {
 		return mcp.NewToolResultError(err.Error()), nil
 	}
@@ -1487,12 +1663,17 @@ func (s *Server) handleTasksListTaskLists(ctx context.Context, request mcp.CallT
 }
 
 func (s *Server) handleTasksCreateTaskList(ctx context.Context, request mcp.CallToolRequest) (*mcp.CallToolResult, error) {
+	svc, err := s.resolveServices(ctx, "")
+	if err != nil {
+		return mcp.NewToolResultError(err.Error()), nil
+	}
+
 	title, err := request.RequireString("title")
 	if err != nil {
 		return mcp.NewToolResultError(err.Error()), nil
 	}
 
-	taskList, err := s.tasks.CreateTaskList(ctx, title)
+	taskList, err := svc.Tasks.CreateTaskList(ctx, title)
 	if err != nil {
 		return mcp.NewToolResultError(err.Error()), nil
 	}
@@ -1501,6 +1682,11 @@ func (s *Server) handleTasksCreateTaskList(ctx context.Context, request mcp.Call
 }
 
 func (s *Server) handleTasksUpdateTaskList(ctx context.Context, request mcp.CallToolRequest) (*mcp.CallToolResult, error) {
+	svc, err := s.resolveServices(ctx, "")
+	if err != nil {
+		return mcp.NewToolResultError(err.Error()), nil
+	}
+
 	tasklistID, err := request.RequireString("tasklist_id")
 	if err != nil {
 		return mcp.NewToolResultError(err.Error()), nil
@@ -1511,7 +1697,7 @@ func (s *Server) handleTasksUpdateTaskList(ctx context.Context, request mcp.Call
 		return mcp.NewToolResultError(err.Error()), nil
 	}
 
-	taskList, err := s.tasks.UpdateTaskList(ctx, tasklistID, title)
+	taskList, err := svc.Tasks.UpdateTaskList(ctx, tasklistID, title)
 	if err != nil {
 		return mcp.NewToolResultError(err.Error()), nil
 	}
@@ -1520,12 +1706,17 @@ func (s *Server) handleTasksUpdateTaskList(ctx context.Context, request mcp.Call
 }
 
 func (s *Server) handleTasksDeleteTaskList(ctx context.Context, request mcp.CallToolRequest) (*mcp.CallToolResult, error) {
+	svc, err := s.resolveServices(ctx, "")
+	if err != nil {
+		return mcp.NewToolResultError(err.Error()), nil
+	}
+
 	tasklistID, err := request.RequireString("tasklist_id")
 	if err != nil {
 		return mcp.NewToolResultError(err.Error()), nil
 	}
 
-	err = s.tasks.DeleteTaskList(ctx, tasklistID)
+	err = svc.Tasks.DeleteTaskList(ctx, tasklistID)
 	if err != nil {
 		return mcp.NewToolResultError(err.Error()), nil
 	}
@@ -1537,13 +1728,18 @@ func (s *Server) handleTasksDeleteTaskList(ctx context.Context, request mcp.Call
 }
 
 func (s *Server) handleTasksListTasks(ctx context.Context, request mcp.CallToolRequest) (*mcp.CallToolResult, error) {
+	svc, err := s.resolveServices(ctx, "")
+	if err != nil {
+		return mcp.NewToolResultError(err.Error()), nil
+	}
+
 	tasklistID := request.GetString("tasklist_id", "@default")
 	showCompleted := request.GetBool("show_completed", false)
 	showHidden := request.GetBool("show_hidden", false)
 	dueMin := request.GetString("due_min", "")
 	dueMax := request.GetString("due_max", "")
 
-	tasks, err := s.tasks.ListTasks(ctx, tasklistID, showCompleted, showHidden, dueMin, dueMax)
+	tasks, err := svc.Tasks.ListTasks(ctx, tasklistID, showCompleted, showHidden, dueMin, dueMax)
 	if err != nil {
 		return mcp.NewToolResultError(err.Error()), nil
 	}
@@ -1555,6 +1751,11 @@ func (s *Server) handleTasksListTasks(ctx context.Context, request mcp.CallToolR
 }
 
 func (s *Server) handleTasksCreateTask(ctx context.Context, request mcp.CallToolRequest) (*mcp.CallToolResult, error) {
+	svc, err := s.resolveServices(ctx, "")
+	if err != nil {
+		return mcp.NewToolResultError(err.Error()), nil
+	}
+
 	title, err := request.RequireString("title")
 	if err != nil {
 		return mcp.NewToolResultError(err.Error()), nil
@@ -1575,7 +1776,7 @@ func (s *Server) handleTasksCreateTask(ctx context.Context, request mcp.CallTool
 		task.Due = due
 	}
 
-	created, err := s.tasks.CreateTask(ctx, tasklistID, task, parent)
+	created, err := svc.Tasks.CreateTask(ctx, tasklistID, task, parent)
 	if err != nil {
 		return mcp.NewToolResultError(err.Error()), nil
 	}
@@ -1584,6 +1785,11 @@ func (s *Server) handleTasksCreateTask(ctx context.Context, request mcp.CallTool
 }
 
 func (s *Server) handleTasksUpdateTask(ctx context.Context, request mcp.CallToolRequest) (*mcp.CallToolResult, error) {
+	svc, err := s.resolveServices(ctx, "")
+	if err != nil {
+		return mcp.NewToolResultError(err.Error()), nil
+	}
+
 	taskID, err := request.RequireString("task_id")
 	if err != nil {
 		return mcp.NewToolResultError(err.Error()), nil
@@ -1609,7 +1815,7 @@ func (s *Server) handleTasksUpdateTask(ctx context.Context, request mcp.CallTool
 		task.Status = status
 	}
 
-	updated, err := s.tasks.UpdateTask(ctx, tasklistID, taskID, task)
+	updated, err := svc.Tasks.UpdateTask(ctx, tasklistID, taskID, task)
 	if err != nil {
 		return mcp.NewToolResultError(err.Error()), nil
 	}
@@ -1618,6 +1824,11 @@ func (s *Server) handleTasksUpdateTask(ctx context.Context, request mcp.CallTool
 }
 
 func (s *Server) handleTasksDeleteTask(ctx context.Context, request mcp.CallToolRequest) (*mcp.CallToolResult, error) {
+	svc, err := s.resolveServices(ctx, "")
+	if err != nil {
+		return mcp.NewToolResultError(err.Error()), nil
+	}
+
 	taskID, err := request.RequireString("task_id")
 	if err != nil {
 		return mcp.NewToolResultError(err.Error()), nil
@@ -1625,7 +1836,7 @@ func (s *Server) handleTasksDeleteTask(ctx context.Context, request mcp.CallTool
 
 	tasklistID := request.GetString("tasklist_id", "@default")
 
-	err = s.tasks.DeleteTask(ctx, tasklistID, taskID)
+	err = svc.Tasks.DeleteTask(ctx, tasklistID, taskID)
 	if err != nil {
 		return mcp.NewToolResultError(err.Error()), nil
 	}
@@ -1669,7 +1880,14 @@ func (s *Server) handleAuthStatus(ctx context.Context, request mcp.CallToolReque
 	}
 
 	// Try a lightweight API call to verify auth works
-	_, err := s.gmail.ListMessages(ctx, "", 1)
+	svc, err := s.resolveServices(ctx, "")
+	if err != nil {
+		return mcp.NewToolResultJSON(AuthStatusResponse{
+			Valid:   false,
+			Message: fmt.Sprintf("failed to resolve services: %v", err),
+		})
+	}
+	_, err = svc.Gmail.ListMessages(ctx, "", 1)
 	if err != nil {
 		return mcp.NewToolResultJSON(AuthStatusResponse{
 			Valid:   false,

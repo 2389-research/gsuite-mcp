@@ -139,11 +139,16 @@ func (s *Server) registerResources() {
 // Resource handlers
 
 func (s *Server) handleTodayCalendarResource(ctx context.Context, request mcp.ReadResourceRequest) ([]mcp.ResourceContents, error) {
+	svc, err := s.resolveServices(ctx, "")
+	if err != nil {
+		return nil, fmt.Errorf("failed to resolve services: %w", err)
+	}
+
 	now := time.Now()
 	startOfDay := time.Date(now.Year(), now.Month(), now.Day(), 0, 0, 0, 0, now.Location())
 	endOfDay := startOfDay.Add(24 * time.Hour)
 
-	events, err := s.calendar.ListEvents(ctx, 50, startOfDay, endOfDay)
+	events, err := svc.Calendar.ListEvents(ctx, 50, startOfDay, endOfDay)
 	if err != nil {
 		return nil, fmt.Errorf("failed to fetch today's events: %w", err)
 	}
@@ -168,6 +173,11 @@ func (s *Server) handleTodayCalendarResource(ctx context.Context, request mcp.Re
 }
 
 func (s *Server) handleThisWeekCalendarResource(ctx context.Context, request mcp.ReadResourceRequest) ([]mcp.ResourceContents, error) {
+	svc, err := s.resolveServices(ctx, "")
+	if err != nil {
+		return nil, fmt.Errorf("failed to resolve services: %w", err)
+	}
+
 	now := time.Now()
 	startOfWeek := time.Date(now.Year(), now.Month(), now.Day(), 0, 0, 0, 0, now.Location())
 	// Adjust to Monday if not already
@@ -176,7 +186,7 @@ func (s *Server) handleThisWeekCalendarResource(ctx context.Context, request mcp
 	}
 	endOfWeek := startOfWeek.Add(7 * 24 * time.Hour)
 
-	events, err := s.calendar.ListEvents(ctx, 100, startOfWeek, endOfWeek)
+	events, err := svc.Calendar.ListEvents(ctx, 100, startOfWeek, endOfWeek)
 	if err != nil {
 		return nil, fmt.Errorf("failed to fetch this week's events: %w", err)
 	}
@@ -227,7 +237,12 @@ func (s *Server) handleThisWeekCalendarResource(ctx context.Context, request mcp
 }
 
 func (s *Server) handleUnreadEmailsResource(ctx context.Context, request mcp.ReadResourceRequest) ([]mcp.ResourceContents, error) {
-	messages, err := s.gmail.ListMessages(ctx, "is:unread", 20)
+	svc, err := s.resolveServices(ctx, "")
+	if err != nil {
+		return nil, fmt.Errorf("failed to resolve services: %w", err)
+	}
+
+	messages, err := svc.Gmail.ListMessages(ctx, "is:unread", 20)
 	if err != nil {
 		return nil, fmt.Errorf("failed to fetch unread emails: %w", err)
 	}
@@ -251,7 +266,12 @@ func (s *Server) handleUnreadEmailsResource(ctx context.Context, request mcp.Rea
 }
 
 func (s *Server) handleImportantEmailsResource(ctx context.Context, request mcp.ReadResourceRequest) ([]mcp.ResourceContents, error) {
-	messages, err := s.gmail.ListMessages(ctx, "is:unread is:important", 10)
+	svc, err := s.resolveServices(ctx, "")
+	if err != nil {
+		return nil, fmt.Errorf("failed to resolve services: %w", err)
+	}
+
+	messages, err := svc.Gmail.ListMessages(ctx, "is:unread is:important", 10)
 	if err != nil {
 		return nil, fmt.Errorf("failed to fetch important emails: %w", err)
 	}
@@ -275,7 +295,12 @@ func (s *Server) handleImportantEmailsResource(ctx context.Context, request mcp.
 }
 
 func (s *Server) handleRecentContactsResource(ctx context.Context, request mcp.ReadResourceRequest) ([]mcp.ResourceContents, error) {
-	contacts, err := s.people.ListContacts(ctx, 20)
+	svc, err := s.resolveServices(ctx, "")
+	if err != nil {
+		return nil, fmt.Errorf("failed to resolve services: %w", err)
+	}
+
+	contacts, err := svc.People.ListContacts(ctx, 20)
 	if err != nil {
 		return nil, fmt.Errorf("failed to fetch recent contacts: %w", err)
 	}
@@ -299,11 +324,16 @@ func (s *Server) handleRecentContactsResource(ctx context.Context, request mcp.R
 }
 
 func (s *Server) handleUpcomingMeetingsResource(ctx context.Context, request mcp.ReadResourceRequest) ([]mcp.ResourceContents, error) {
+	svc, err := s.resolveServices(ctx, "")
+	if err != nil {
+		return nil, fmt.Errorf("failed to resolve services: %w", err)
+	}
+
 	now := time.Now()
 	// Get events for next 7 days
 	endTime := now.Add(7 * 24 * time.Hour)
 
-	events, err := s.calendar.ListEvents(ctx, 5, now, endTime)
+	events, err := svc.Calendar.ListEvents(ctx, 5, now, endTime)
 	if err != nil {
 		return nil, fmt.Errorf("failed to fetch upcoming meetings: %w", err)
 	}
@@ -330,10 +360,15 @@ func (s *Server) handleUpcomingMeetingsResource(ctx context.Context, request mcp
 }
 
 func (s *Server) handleCalendarAvailabilityResource(ctx context.Context, request mcp.ReadResourceRequest) ([]mcp.ResourceContents, error) {
+	svc, err := s.resolveServices(ctx, "")
+	if err != nil {
+		return nil, fmt.Errorf("failed to resolve services: %w", err)
+	}
+
 	now := time.Now()
 	endTime := now.Add(7 * 24 * time.Hour)
 
-	events, err := s.calendar.ListEvents(ctx, 100, now, endTime)
+	events, err := svc.Calendar.ListEvents(ctx, 100, now, endTime)
 	if err != nil {
 		return nil, fmt.Errorf("failed to fetch calendar for availability: %w", err)
 	}
@@ -418,8 +453,13 @@ func (s *Server) handleCalendarAvailabilityResource(ctx context.Context, request
 }
 
 func (s *Server) handleDraftsResource(ctx context.Context, request mcp.ReadResourceRequest) ([]mcp.ResourceContents, error) {
+	svc, err := s.resolveServices(ctx, "")
+	if err != nil {
+		return nil, fmt.Errorf("failed to resolve services: %w", err)
+	}
+
 	// List draft emails
-	drafts, err := s.gmail.ListDrafts(ctx, 10)
+	drafts, err := svc.Gmail.ListDrafts(ctx, 10)
 	if err != nil {
 		return nil, fmt.Errorf("failed to fetch drafts: %w", err)
 	}
@@ -443,11 +483,16 @@ func (s *Server) handleDraftsResource(ctx context.Context, request mcp.ReadResou
 }
 
 func (s *Server) handleTodayTasksResource(ctx context.Context, request mcp.ReadResourceRequest) ([]mcp.ResourceContents, error) {
+	svc, err := s.resolveServices(ctx, "")
+	if err != nil {
+		return nil, fmt.Errorf("failed to resolve services: %w", err)
+	}
+
 	now := time.Now()
 	startOfDay := time.Date(now.Year(), now.Month(), now.Day(), 0, 0, 0, 0, now.Location())
 	endOfDay := startOfDay.Add(24 * time.Hour)
 
-	tasks, err := s.tasks.ListTasks(ctx, "@default", false, false, startOfDay.Format(time.RFC3339), endOfDay.Format(time.RFC3339))
+	tasks, err := svc.Tasks.ListTasks(ctx, "@default", false, false, startOfDay.Format(time.RFC3339), endOfDay.Format(time.RFC3339))
 	if err != nil {
 		return nil, fmt.Errorf("failed to fetch today's tasks: %w", err)
 	}
@@ -471,11 +516,16 @@ func (s *Server) handleTodayTasksResource(ctx context.Context, request mcp.ReadR
 }
 
 func (s *Server) handleUpcomingTasksResource(ctx context.Context, request mcp.ReadResourceRequest) ([]mcp.ResourceContents, error) {
+	svc, err := s.resolveServices(ctx, "")
+	if err != nil {
+		return nil, fmt.Errorf("failed to resolve services: %w", err)
+	}
+
 	now := time.Now()
 	startOfDay := time.Date(now.Year(), now.Month(), now.Day(), 0, 0, 0, 0, now.Location())
 	endOfWeek := startOfDay.Add(7 * 24 * time.Hour)
 
-	tasks, err := s.tasks.ListTasks(ctx, "@default", false, false, startOfDay.Format(time.RFC3339), endOfWeek.Format(time.RFC3339))
+	tasks, err := svc.Tasks.ListTasks(ctx, "@default", false, false, startOfDay.Format(time.RFC3339), endOfWeek.Format(time.RFC3339))
 	if err != nil {
 		return nil, fmt.Errorf("failed to fetch upcoming tasks: %w", err)
 	}
@@ -500,12 +550,17 @@ func (s *Server) handleUpcomingTasksResource(ctx context.Context, request mcp.Re
 }
 
 func (s *Server) handleOverdueTasksResource(ctx context.Context, request mcp.ReadResourceRequest) ([]mcp.ResourceContents, error) {
+	svc, err := s.resolveServices(ctx, "")
+	if err != nil {
+		return nil, fmt.Errorf("failed to resolve services: %w", err)
+	}
+
 	now := time.Now()
 	startOfDay := time.Date(now.Year(), now.Month(), now.Day(), 0, 0, 0, 0, now.Location())
 	// From epoch to start of today to find overdue tasks
 	epoch := time.Date(1970, 1, 1, 0, 0, 0, 0, time.UTC)
 
-	tasks, err := s.tasks.ListTasks(ctx, "@default", false, false, epoch.Format(time.RFC3339), startOfDay.Format(time.RFC3339))
+	tasks, err := svc.Tasks.ListTasks(ctx, "@default", false, false, epoch.Format(time.RFC3339), startOfDay.Format(time.RFC3339))
 	if err != nil {
 		return nil, fmt.Errorf("failed to fetch overdue tasks: %w", err)
 	}

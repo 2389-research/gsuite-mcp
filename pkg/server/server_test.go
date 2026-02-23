@@ -192,6 +192,32 @@ func TestServer_HasTasksTools(t *testing.T) {
 	assert.True(t, toolNames["tasks_delete_task"])
 }
 
+func TestServer_ResolveServices_Default(t *testing.T) {
+	t.Setenv("ISH_MODE", "true")
+
+	srv, err := NewServer(context.Background())
+	require.NoError(t, err)
+
+	svc, err := srv.resolveServices(context.Background(), "")
+	require.NoError(t, err)
+	assert.NotNil(t, svc)
+	assert.NotNil(t, svc.Gmail)
+	assert.NotNil(t, svc.Calendar)
+	assert.NotNil(t, svc.People)
+	assert.NotNil(t, svc.Tasks)
+}
+
+func TestServer_ResolveServices_UnknownAccount(t *testing.T) {
+	t.Setenv("ISH_MODE", "true")
+
+	srv, err := NewServer(context.Background())
+	require.NoError(t, err)
+
+	_, err = srv.resolveServices(context.Background(), "nonexistent")
+	require.Error(t, err)
+	assert.Contains(t, err.Error(), "unknown account")
+}
+
 func TestExtractAuthCode(t *testing.T) {
 	tests := []struct {
 		name     string
