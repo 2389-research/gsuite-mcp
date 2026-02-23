@@ -5,7 +5,6 @@ package server
 
 import (
 	"context"
-	"strings"
 	"testing"
 
 	"github.com/mark3labs/mcp-go/mcp"
@@ -268,12 +267,65 @@ func TestServer_ToolsAcceptAccountParam(t *testing.T) {
 
 	tools := srv.ListTools()
 	for _, tool := range tools {
-		// Auth tools don't need account param (they handle it differently)
-		if strings.HasPrefix(tool.Name, "auth_") || tool.Name == "accounts_list" {
+		// accounts_list is the only tool that doesn't take an account param
+		if tool.Name == "accounts_list" {
 			continue
 		}
 		props := tool.InputSchema.Properties
 		_, hasAccount := props["account"]
 		assert.True(t, hasAccount, "tool %s should have 'account' property", tool.Name)
+	}
+}
+
+func TestServer_AccountsList_Registered(t *testing.T) {
+	t.Setenv("ISH_MODE", "true")
+
+	srv, err := NewServer(context.Background())
+	require.NoError(t, err)
+
+	tools := srv.ListTools()
+	toolNames := make(map[string]bool)
+	for _, tool := range tools {
+		toolNames[tool.Name] = true
+	}
+
+	assert.True(t, toolNames["accounts_list"], "accounts_list tool should be registered")
+}
+
+func TestServer_HandleAccountsList_ISHMode(t *testing.T) {
+	t.Setenv("ISH_MODE", "true")
+
+	srv, err := NewServer(context.Background())
+	require.NoError(t, err)
+
+	request := createMockRequest("accounts_list", map[string]interface{}{})
+
+	result, err := srv.handleAccountsList(context.Background(), request)
+
+	require.NoError(t, err)
+	assert.NotNil(t, result)
+	assert.NotEmpty(t, result.Content)
+	// In ISH mode, there should be at least 1 account (default)
+	assert.False(t, result.IsError, "accounts_list should not return an error")
+}
+
+func TestServer_AuthToolsAcceptAccountParam(t *testing.T) {
+	t.Setenv("ISH_MODE", "true")
+
+	srv, err := NewServer(context.Background())
+	require.NoError(t, err)
+
+	authTools := []string{"auth_status", "auth_info", "auth_init", "auth_complete", "auth_revoke"}
+	tools := srv.ListTools()
+	toolMap := make(map[string]mcp.Tool)
+	for _, tool := range tools {
+		toolMap[tool.Name] = tool
+	}
+
+	for _, name := range authTools {
+		tool, exists := toolMap[name]
+		require.True(t, exists, "tool %s should exist", name)
+		_, hasAccount := tool.InputSchema.Properties["account"]
+		assert.True(t, hasAccount, "auth tool %s should have 'account' property", name)
 	}
 }

@@ -9,6 +9,7 @@ import (
 	"net/http"
 	"net/url"
 	"os"
+	"path/filepath"
 	"sort"
 	"strings"
 	"time"
@@ -666,10 +667,7 @@ func (s *Server) registerTools() {
 		InputSchema: mcp.ToolInputSchema{
 			Type: "object",
 			Properties: map[string]interface{}{
-				"noop": map[string]interface{}{
-					"type":        "boolean",
-					"description": "No arguments needed; you can omit this",
-				},
+				"account": map[string]string{"type": "string", "description": "Account alias (e.g., 'work', 'personal'). Uses default if not specified."},
 			},
 		},
 	}, s.handleAuthStatus)
@@ -680,10 +678,7 @@ func (s *Server) registerTools() {
 		InputSchema: mcp.ToolInputSchema{
 			Type: "object",
 			Properties: map[string]interface{}{
-				"noop": map[string]interface{}{
-					"type":        "boolean",
-					"description": "No arguments needed; you can omit this",
-				},
+				"account": map[string]string{"type": "string", "description": "Account alias (e.g., 'work', 'personal'). Uses default if not specified."},
 			},
 		},
 	}, s.handleAuthInfo)
@@ -698,6 +693,7 @@ func (s *Server) registerTools() {
 					"type":        "boolean",
 					"description": "Force new auth flow even if current auth is valid",
 				},
+				"account": map[string]string{"type": "string", "description": "Account alias (e.g., 'work', 'personal'). Uses default if not specified."},
 			},
 		},
 	}, s.handleAuthInit)
@@ -708,7 +704,8 @@ func (s *Server) registerTools() {
 		InputSchema: mcp.ToolInputSchema{
 			Type: "object",
 			Properties: map[string]interface{}{
-				"code": map[string]string{"type": "string", "description": "The full redirect URL from the browser, or just the authorization code"},
+				"code":    map[string]string{"type": "string", "description": "The full redirect URL from the browser, or just the authorization code"},
+				"account": map[string]string{"type": "string", "description": "Account alias (e.g., 'work', 'personal'). Uses default if not specified."},
 			},
 			Required: []string{"code"},
 		},
@@ -720,13 +717,20 @@ func (s *Server) registerTools() {
 		InputSchema: mcp.ToolInputSchema{
 			Type: "object",
 			Properties: map[string]interface{}{
-				"noop": map[string]interface{}{
-					"type":        "boolean",
-					"description": "No arguments needed; you can omit this",
-				},
+				"account": map[string]string{"type": "string", "description": "Account alias (e.g., 'work', 'personal'). Uses default if not specified."},
 			},
 		},
 	}, s.handleAuthRevoke)
+
+	// Account management tools
+	s.mcp.AddTool(mcp.Tool{
+		Name:        "accounts_list",
+		Description: "List all configured accounts and their authentication status",
+		InputSchema: mcp.ToolInputSchema{
+			Type:       "object",
+			Properties: map[string]interface{}{},
+		},
+	}, s.handleAccountsList)
 }
 
 // HydratedMessage is a summary of a Gmail message with common fields extracted
@@ -1904,6 +1908,25 @@ func (s *Server) handleTasksDeleteTask(ctx context.Context, request mcp.CallTool
 
 // Auth tool handlers
 
+// authenticatorForAccount creates an Authenticator for a specific account alias.
+// It resolves the account via the registry to find its token path, then creates
+// a fresh Authenticator using the shared credentials and that token path.
+// If the account doesn't exist in the registry, it returns an error.
+func (s *Server) authenticatorForAccount(alias string) (*auth.Authenticator, error) {
+	acct, err := s.registry.Resolve(alias)
+	if err != nil {
+		return nil, err
+	}
+
+	tokenPath := acct.TokenPath
+	if tokenPath == "" {
+		// Fallback for the default account that may not have a token path set
+		tokenPath = auth.GetTokenPath()
+	}
+
+	return auth.NewAuthenticator(auth.GetCredentialsPath(), tokenPath)
+}
+
 // extractAuthCode extracts the authorization code from a URL or returns the input as-is.
 // Handles Google's redirect URL format: http://localhost/?code=4/0AfJohX...&scope=...
 func extractAuthCode(codeOrURL string) string {
@@ -1926,6 +1949,8 @@ type AuthStatusResponse struct {
 }
 
 func (s *Server) handleAuthStatus(ctx context.Context, request mcp.CallToolRequest) (*mcp.CallToolResult, error) {
+	account := request.GetString("account", "")
+
 	// In ISH mode, always return valid
 	if os.Getenv("ISH_MODE") == "true" {
 		return mcp.NewToolResultJSON(AuthStatusResponse{
@@ -1935,7 +1960,7 @@ func (s *Server) handleAuthStatus(ctx context.Context, request mcp.CallToolReque
 	}
 
 	// Try a lightweight API call to verify auth works
-	svc, err := s.resolveServices(ctx, "")
+	svc, err := s.resolveServices(ctx, account)
 	if err != nil {
 		return mcp.NewToolResultJSON(AuthStatusResponse{
 			Valid:   false,
@@ -1967,6 +1992,8 @@ type AuthInfoResponse struct {
 }
 
 func (s *Server) handleAuthInfo(ctx context.Context, request mcp.CallToolRequest) (*mcp.CallToolResult, error) {
+	account := request.GetString("account", "")
+
 	// In ISH mode, return fake info
 	if os.Getenv("ISH_MODE") == "true" {
 		return mcp.NewToolResultJSON(AuthInfoResponse{
@@ -1976,14 +2003,15 @@ func (s *Server) handleAuthInfo(ctx context.Context, request mcp.CallToolRequest
 		})
 	}
 
-	if s.auth == nil {
+	authenticator, err := s.authenticatorForAccount(account)
+	if err != nil {
 		return mcp.NewToolResultJSON(AuthInfoResponse{
 			Valid:   false,
-			Message: "authenticator not initialized",
+			Message: fmt.Sprintf("failed to resolve account: %v", err),
 		})
 	}
 
-	info, err := s.auth.TokenInfo()
+	info, err := authenticator.TokenInfo()
 	if err != nil {
 		return mcp.NewToolResultJSON(AuthInfoResponse{
 			Valid:   false,
@@ -2013,6 +2041,8 @@ type AuthInitResponse struct {
 }
 
 func (s *Server) handleAuthInit(ctx context.Context, request mcp.CallToolRequest) (*mcp.CallToolResult, error) {
+	account := request.GetString("account", "")
+
 	// In ISH mode, return simulated response
 	if os.Getenv("ISH_MODE") == "true" {
 		return mcp.NewToolResultJSON(AuthInitResponse{
@@ -2021,10 +2051,28 @@ func (s *Server) handleAuthInit(ctx context.Context, request mcp.CallToolRequest
 		})
 	}
 
-	if s.auth == nil {
+	// If the account doesn't exist yet, auto-create it in the registry
+	resolvedAlias := account
+	if resolvedAlias == "" {
+		resolvedAlias = s.registry.DefaultAlias
+	}
+	if _, err := s.registry.Resolve(resolvedAlias); err != nil {
+		// Auto-create with a generated token path
+		tokensDir := filepath.Join(filepath.Dir(auth.GetTokenPath()), "tokens")
+		tokenPath := filepath.Join(tokensDir, resolvedAlias+".json")
+		if addErr := s.registry.AddAccount(resolvedAlias, tokenPath); addErr != nil {
+			return mcp.NewToolResultJSON(AuthInitResponse{
+				Status:  "error",
+				Message: fmt.Sprintf("failed to create account '%s': %v", resolvedAlias, addErr),
+			})
+		}
+	}
+
+	authenticator, err := s.authenticatorForAccount(account)
+	if err != nil {
 		return mcp.NewToolResultJSON(AuthInitResponse{
 			Status:  "error",
-			Message: "authenticator not initialized",
+			Message: fmt.Sprintf("failed to resolve account: %v", err),
 		})
 	}
 
@@ -2032,7 +2080,7 @@ func (s *Server) handleAuthInit(ctx context.Context, request mcp.CallToolRequest
 
 	// Check current auth status if not forcing
 	if !force {
-		info, err := s.auth.TokenInfo()
+		info, err := authenticator.TokenInfo()
 		if err == nil && info.Valid {
 			return mcp.NewToolResultJSON(AuthInitResponse{
 				Status:  "valid",
@@ -2042,7 +2090,7 @@ func (s *Server) handleAuthInit(ctx context.Context, request mcp.CallToolRequest
 	}
 
 	// Return auth URL for user to visit
-	authURL := s.auth.AuthURL()
+	authURL := authenticator.AuthURL()
 	return mcp.NewToolResultJSON(AuthInitResponse{
 		Status:  "auth_required",
 		AuthURL: authURL,
@@ -2057,6 +2105,8 @@ type AuthCompleteResponse struct {
 }
 
 func (s *Server) handleAuthComplete(ctx context.Context, request mcp.CallToolRequest) (*mcp.CallToolResult, error) {
+	account := request.GetString("account", "")
+
 	// In ISH mode, return simulated response
 	if os.Getenv("ISH_MODE") == "true" {
 		return mcp.NewToolResultJSON(AuthCompleteResponse{
@@ -2065,10 +2115,11 @@ func (s *Server) handleAuthComplete(ctx context.Context, request mcp.CallToolReq
 		})
 	}
 
-	if s.auth == nil {
+	authenticator, err := s.authenticatorForAccount(account)
+	if err != nil {
 		return mcp.NewToolResultJSON(AuthCompleteResponse{
 			Success: false,
-			Message: "authenticator not initialized",
+			Message: fmt.Sprintf("failed to resolve account: %v", err),
 		})
 	}
 
@@ -2080,12 +2131,23 @@ func (s *Server) handleAuthComplete(ctx context.Context, request mcp.CallToolReq
 	// Extract code from URL if user provided the full redirect URL
 	code := extractAuthCode(codeOrURL)
 
-	err = s.auth.ExchangeCode(ctx, code)
+	err = authenticator.ExchangeCode(ctx, code)
 	if err != nil {
 		return mcp.NewToolResultJSON(AuthCompleteResponse{
 			Success: false,
 			Message: fmt.Sprintf("token exchange failed: %v", err),
 		})
+	}
+
+	// Create fresh services for this account using the newly authenticated client
+	acct, resolveErr := s.registry.Resolve(account)
+	if resolveErr == nil {
+		client, clientErr := authenticator.GetClientIfAuthenticated(ctx)
+		if clientErr == nil && client != nil {
+			acct.Client = client
+			// Evict cached services so they'll be recreated with the new client
+			delete(s.services, acct.Alias)
+		}
 	}
 
 	return mcp.NewToolResultJSON(AuthCompleteResponse{
@@ -2101,6 +2163,8 @@ type AuthRevokeResponse struct {
 }
 
 func (s *Server) handleAuthRevoke(ctx context.Context, request mcp.CallToolRequest) (*mcp.CallToolResult, error) {
+	account := request.GetString("account", "")
+
 	// In ISH mode, return simulated response
 	if os.Getenv("ISH_MODE") == "true" {
 		return mcp.NewToolResultJSON(AuthRevokeResponse{
@@ -2109,14 +2173,15 @@ func (s *Server) handleAuthRevoke(ctx context.Context, request mcp.CallToolReque
 		})
 	}
 
-	if s.auth == nil {
+	authenticator, err := s.authenticatorForAccount(account)
+	if err != nil {
 		return mcp.NewToolResultJSON(AuthRevokeResponse{
 			Success: false,
-			Message: "authenticator not initialized",
+			Message: fmt.Sprintf("failed to resolve account: %v", err),
 		})
 	}
 
-	err := s.auth.RevokeToken()
+	err = authenticator.RevokeToken()
 	if err != nil {
 		return mcp.NewToolResultJSON(AuthRevokeResponse{
 			Success: false,
@@ -2124,9 +2189,48 @@ func (s *Server) handleAuthRevoke(ctx context.Context, request mcp.CallToolReque
 		})
 	}
 
+	// Evict cached services for this account
+	acct, resolveErr := s.registry.Resolve(account)
+	if resolveErr == nil {
+		acct.Client = nil
+		delete(s.services, acct.Alias)
+	}
+
 	return mcp.NewToolResultJSON(AuthRevokeResponse{
 		Success: true,
 		Message: "token revoked - use auth_init to start new authentication flow",
+	})
+}
+
+// AccountInfo describes a single account's metadata and auth status
+type AccountInfo struct {
+	Alias         string `json:"alias"`
+	IsDefault     bool   `json:"is_default"`
+	Authenticated bool   `json:"authenticated"`
+	TokenPath     string `json:"token_path"`
+}
+
+func (s *Server) handleAccountsList(ctx context.Context, req mcp.CallToolRequest) (*mcp.CallToolResult, error) {
+	var accountInfos []AccountInfo
+	for _, alias := range s.registry.ListAccounts() {
+		acct, _ := s.registry.Resolve(alias)
+		authenticated := false
+		if acct.TokenPath != "" {
+			if _, err := os.Stat(acct.TokenPath); err == nil {
+				authenticated = true
+			}
+		}
+		accountInfos = append(accountInfos, AccountInfo{
+			Alias:         alias,
+			IsDefault:     alias == s.registry.DefaultAlias,
+			Authenticated: authenticated,
+			TokenPath:     acct.TokenPath,
+		})
+	}
+
+	return mcp.NewToolResultJSON(map[string]interface{}{
+		"accounts": accountInfos,
+		"count":    len(accountInfos),
 	})
 }
 

@@ -964,6 +964,8 @@ func TestToolRegistrationCompleteness(t *testing.T) {
 		"auth_init",
 		"auth_complete",
 		"auth_revoke",
+		// Account management tools
+		"accounts_list",
 	}
 
 	for _, expectedTool := range expectedTools {
