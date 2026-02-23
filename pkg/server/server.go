@@ -9,7 +9,6 @@ import (
 	"net/http"
 	"net/url"
 	"os"
-	"path/filepath"
 	"sort"
 	"strings"
 	"sync"
@@ -2072,8 +2071,7 @@ func (s *Server) handleAuthInit(ctx context.Context, request mcp.CallToolRequest
 	}
 	if _, err := s.registry.Resolve(resolvedAlias); err != nil {
 		// Auto-create with a generated token path
-		tokensDir := filepath.Join(filepath.Dir(auth.GetTokenPath()), "tokens")
-		tokenPath := filepath.Join(tokensDir, resolvedAlias+".json")
+		tokenPath := auth.GenerateAccountTokenPath(resolvedAlias)
 		if addErr := s.registry.AddAccount(resolvedAlias, tokenPath); addErr != nil {
 			return mcp.NewToolResultJSON(AuthInitResponse{
 				Status:  "error",

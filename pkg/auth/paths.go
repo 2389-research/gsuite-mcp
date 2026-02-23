@@ -86,6 +86,11 @@ func GetAccountsConfigPath() string {
 	return filepath.Clean(filepath.Join(configHome, appName, defaultAccounts))
 }
 
+// GenerateAccountTokenPath generates a token file path for a named account
+func GenerateAccountTokenPath(alias string) string {
+	return filepath.Join(filepath.Dir(GetTokenPath()), "tokens", alias+".json")
+}
+
 // EnsureDir creates the parent directory for a file path if it doesn't exist.
 // Directories are created with 0700 permissions (owner read/write/execute only).
 func EnsureDir(filePath string) error {

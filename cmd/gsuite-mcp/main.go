@@ -9,7 +9,6 @@ import (
 	"fmt"
 	"log"
 	"os"
-	"path/filepath"
 	"strings"
 
 	"github.com/harper/gsuite-mcp/pkg/accounts"
@@ -85,8 +84,7 @@ func resolveTokenPath(alias string, autoCreate bool) string {
 			os.Exit(1)
 		}
 		// Auto-create account with a generated token path
-		tokensDir := filepath.Join(filepath.Dir(auth.GetTokenPath()), "tokens")
-		tokenPath := filepath.Join(tokensDir, alias+".json")
+		tokenPath := auth.GenerateAccountTokenPath(alias)
 		if addErr := registry.AddAccount(alias, tokenPath); addErr != nil {
 			fmt.Fprintf(os.Stderr, "Error creating account '%s': %v\n", alias, addErr)
 			os.Exit(1)
@@ -174,9 +172,9 @@ MCP CLIENT CONFIGURATION:
     }
 
 FEATURES:
-    • 19 MCP tools for Gmail, Calendar, and Contacts
-    • 8 MCP prompts for common workflows
-    • 8 MCP resources for dynamic data access
+    • 33 MCP tools for Gmail, Calendar, Contacts, and Tasks
+    • 10 MCP prompts for common workflows
+    • 11 MCP resources for dynamic data access
     • Automatic retry logic with exponential backoff
     • OAuth 2.0 authentication
 

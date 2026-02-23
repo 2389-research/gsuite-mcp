@@ -57,7 +57,11 @@ func (s *Service) ListTaskLists(ctx context.Context) ([]*tasks.TaskList, error) 
 	if err != nil {
 		return nil, fmt.Errorf("failed to list task lists: %w", err)
 	}
-	return result.Items, nil
+	items := result.Items
+	if items == nil {
+		items = []*tasks.TaskList{}
+	}
+	return items, nil
 }
 
 // CreateTaskList creates a new task list
@@ -123,7 +127,11 @@ func (s *Service) ListTasks(ctx context.Context, tasklistID string, showComplete
 	if err != nil {
 		return nil, fmt.Errorf("failed to list tasks: %w", err)
 	}
-	return result.Items, nil
+	items := result.Items
+	if items == nil {
+		items = []*tasks.Task{}
+	}
+	return items, nil
 }
 
 // CreateTask creates a task in a task list
