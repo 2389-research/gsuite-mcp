@@ -1,5 +1,5 @@
 // ABOUTME: MCP server implementation
-// ABOUTME: Exposes Gmail, Calendar, and People services as MCP tools
+// ABOUTME: Exposes Gmail, Calendar, People, and Tasks services as MCP tools
 
 package server
 
@@ -17,11 +17,13 @@ import (
 	"github.com/harper/gsuite-mcp/pkg/calendar"
 	"github.com/harper/gsuite-mcp/pkg/gmail"
 	"github.com/harper/gsuite-mcp/pkg/people"
+	"github.com/harper/gsuite-mcp/pkg/tasks"
 
 	"github.com/mark3labs/mcp-go/mcp"
 	"github.com/mark3labs/mcp-go/server"
 	googlecalendar "google.golang.org/api/calendar/v3"
 	googlepeople "google.golang.org/api/people/v1"
+	googletasks "google.golang.org/api/tasks/v1"
 )
 
 // Server is the MCP server for GSuite APIs
@@ -29,6 +31,7 @@ type Server struct {
 	gmail    *gmail.Service
 	calendar *calendar.Service
 	people   *people.Service
+	tasks    *tasks.Service
 	mcp      *server.MCPServer
 	auth     *auth.Authenticator // For auth management tools
 }
@@ -76,10 +79,16 @@ func NewServer(ctx context.Context) (*Server, error) {
 		return nil, fmt.Errorf("failed to create People service: %w", err)
 	}
 
+	tasksSvc, err := tasks.NewService(ctx, client)
+	if err != nil {
+		return nil, fmt.Errorf("failed to create Tasks service: %w", err)
+	}
+
 	s := &Server{
 		gmail:    gmailSvc,
 		calendar: calendarSvc,
 		people:   peopleSvc,
+		tasks:    tasksSvc,
 		auth:     authenticator,
 	}
 
@@ -444,6 +453,114 @@ func (s *Server) registerTools() {
 		},
 	}, s.handlePeopleDeleteContact)
 
+	// Tasks tools
+	s.mcp.AddTool(mcp.Tool{
+		Name:        "tasks_list_tasklists",
+		Description: "List all task lists",
+		InputSchema: mcp.ToolInputSchema{
+			Type:       "object",
+			Properties: map[string]interface{}{},
+		},
+	}, s.handleTasksListTaskLists)
+
+	s.mcp.AddTool(mcp.Tool{
+		Name:        "tasks_create_tasklist",
+		Description: "Create a new task list",
+		InputSchema: mcp.ToolInputSchema{
+			Type: "object",
+			Properties: map[string]interface{}{
+				"title": map[string]string{"type": "string", "description": "Title of the task list"},
+			},
+			Required: []string{"title"},
+		},
+	}, s.handleTasksCreateTaskList)
+
+	s.mcp.AddTool(mcp.Tool{
+		Name:        "tasks_update_tasklist",
+		Description: "Update a task list's title",
+		InputSchema: mcp.ToolInputSchema{
+			Type: "object",
+			Properties: map[string]interface{}{
+				"tasklist_id": map[string]string{"type": "string", "description": "ID of the task list"},
+				"title":       map[string]string{"type": "string", "description": "New title for the task list"},
+			},
+			Required: []string{"tasklist_id", "title"},
+		},
+	}, s.handleTasksUpdateTaskList)
+
+	s.mcp.AddTool(mcp.Tool{
+		Name:        "tasks_delete_tasklist",
+		Description: "Delete a task list",
+		InputSchema: mcp.ToolInputSchema{
+			Type: "object",
+			Properties: map[string]interface{}{
+				"tasklist_id": map[string]string{"type": "string", "description": "ID of the task list to delete"},
+			},
+			Required: []string{"tasklist_id"},
+		},
+	}, s.handleTasksDeleteTaskList)
+
+	s.mcp.AddTool(mcp.Tool{
+		Name:        "tasks_list_tasks",
+		Description: "List tasks in a task list",
+		InputSchema: mcp.ToolInputSchema{
+			Type: "object",
+			Properties: map[string]interface{}{
+				"tasklist_id":    map[string]string{"type": "string", "description": "ID of the task list (default: @default)"},
+				"show_completed": map[string]interface{}{"type": "boolean", "description": "Include completed tasks (default: false)"},
+				"show_hidden":    map[string]interface{}{"type": "boolean", "description": "Include hidden tasks (default: false)"},
+				"due_min":        map[string]string{"type": "string", "description": "Minimum due date (RFC 3339, e.g., 2026-01-01T00:00:00Z)"},
+				"due_max":        map[string]string{"type": "string", "description": "Maximum due date (RFC 3339, e.g., 2026-12-31T23:59:59Z)"},
+			},
+		},
+	}, s.handleTasksListTasks)
+
+	s.mcp.AddTool(mcp.Tool{
+		Name:        "tasks_create_task",
+		Description: "Create a task in a task list",
+		InputSchema: mcp.ToolInputSchema{
+			Type: "object",
+			Properties: map[string]interface{}{
+				"tasklist_id": map[string]string{"type": "string", "description": "ID of the task list (default: @default)"},
+				"title":       map[string]string{"type": "string", "description": "Title of the task"},
+				"notes":       map[string]string{"type": "string", "description": "Additional notes for the task"},
+				"due":         map[string]string{"type": "string", "description": "Due date (RFC 3339, e.g., 2026-03-01T00:00:00Z)"},
+				"parent":      map[string]string{"type": "string", "description": "Parent task ID for creating a subtask"},
+			},
+			Required: []string{"title"},
+		},
+	}, s.handleTasksCreateTask)
+
+	s.mcp.AddTool(mcp.Tool{
+		Name:        "tasks_update_task",
+		Description: "Update a task's title, notes, due date, or status",
+		InputSchema: mcp.ToolInputSchema{
+			Type: "object",
+			Properties: map[string]interface{}{
+				"tasklist_id": map[string]string{"type": "string", "description": "ID of the task list (default: @default)"},
+				"task_id":     map[string]string{"type": "string", "description": "ID of the task to update"},
+				"title":       map[string]string{"type": "string", "description": "New title"},
+				"notes":       map[string]string{"type": "string", "description": "New notes"},
+				"due":         map[string]string{"type": "string", "description": "New due date (RFC 3339)"},
+				"status":      map[string]string{"type": "string", "description": "Task status: 'needsAction' or 'completed'"},
+			},
+			Required: []string{"task_id"},
+		},
+	}, s.handleTasksUpdateTask)
+
+	s.mcp.AddTool(mcp.Tool{
+		Name:        "tasks_delete_task",
+		Description: "Delete a task",
+		InputSchema: mcp.ToolInputSchema{
+			Type: "object",
+			Properties: map[string]interface{}{
+				"tasklist_id": map[string]string{"type": "string", "description": "ID of the task list (default: @default)"},
+				"task_id":     map[string]string{"type": "string", "description": "ID of the task to delete"},
+			},
+			Required: []string{"task_id"},
+		},
+	}, s.handleTasksDeleteTask)
+
 	// Auth tools
 	s.mcp.AddTool(mcp.Tool{
 		Name:        "auth_status",
@@ -542,6 +659,18 @@ type ListEventsResponse struct {
 type ListContactsResponse struct {
 	Contacts any `json:"contacts"`
 	Count    int `json:"count"`
+}
+
+// ListTaskListsResponse wraps task lists for MCP
+type ListTaskListsResponse struct {
+	TaskLists []*googletasks.TaskList `json:"task_lists"`
+	Count     int                     `json:"count"`
+}
+
+// ListTasksResponse wraps tasks for MCP
+type ListTasksResponse struct {
+	Tasks []*googletasks.Task `json:"tasks"`
+	Count int                 `json:"count"`
 }
 
 // Tool handlers
@@ -1341,6 +1470,170 @@ func (s *Server) handlePeopleDeleteContact(ctx context.Context, request mcp.Call
 	}
 
 	return mcp.NewToolResultText(fmt.Sprintf("Contact %s deleted successfully", resourceName)), nil
+}
+
+// Tasks tool handlers
+
+func (s *Server) handleTasksListTaskLists(ctx context.Context, request mcp.CallToolRequest) (*mcp.CallToolResult, error) {
+	taskLists, err := s.tasks.ListTaskLists(ctx)
+	if err != nil {
+		return mcp.NewToolResultError(err.Error()), nil
+	}
+
+	return mcp.NewToolResultJSON(ListTaskListsResponse{
+		TaskLists: taskLists,
+		Count:     len(taskLists),
+	})
+}
+
+func (s *Server) handleTasksCreateTaskList(ctx context.Context, request mcp.CallToolRequest) (*mcp.CallToolResult, error) {
+	title, err := request.RequireString("title")
+	if err != nil {
+		return mcp.NewToolResultError(err.Error()), nil
+	}
+
+	taskList, err := s.tasks.CreateTaskList(ctx, title)
+	if err != nil {
+		return mcp.NewToolResultError(err.Error()), nil
+	}
+
+	return mcp.NewToolResultJSON(taskList)
+}
+
+func (s *Server) handleTasksUpdateTaskList(ctx context.Context, request mcp.CallToolRequest) (*mcp.CallToolResult, error) {
+	tasklistID, err := request.RequireString("tasklist_id")
+	if err != nil {
+		return mcp.NewToolResultError(err.Error()), nil
+	}
+
+	title, err := request.RequireString("title")
+	if err != nil {
+		return mcp.NewToolResultError(err.Error()), nil
+	}
+
+	taskList, err := s.tasks.UpdateTaskList(ctx, tasklistID, title)
+	if err != nil {
+		return mcp.NewToolResultError(err.Error()), nil
+	}
+
+	return mcp.NewToolResultJSON(taskList)
+}
+
+func (s *Server) handleTasksDeleteTaskList(ctx context.Context, request mcp.CallToolRequest) (*mcp.CallToolResult, error) {
+	tasklistID, err := request.RequireString("tasklist_id")
+	if err != nil {
+		return mcp.NewToolResultError(err.Error()), nil
+	}
+
+	err = s.tasks.DeleteTaskList(ctx, tasklistID)
+	if err != nil {
+		return mcp.NewToolResultError(err.Error()), nil
+	}
+
+	return mcp.NewToolResultJSON(map[string]string{
+		"status":      "deleted",
+		"tasklist_id": tasklistID,
+	})
+}
+
+func (s *Server) handleTasksListTasks(ctx context.Context, request mcp.CallToolRequest) (*mcp.CallToolResult, error) {
+	tasklistID := request.GetString("tasklist_id", "@default")
+	showCompleted := request.GetBool("show_completed", false)
+	showHidden := request.GetBool("show_hidden", false)
+	dueMin := request.GetString("due_min", "")
+	dueMax := request.GetString("due_max", "")
+
+	tasks, err := s.tasks.ListTasks(ctx, tasklistID, showCompleted, showHidden, dueMin, dueMax)
+	if err != nil {
+		return mcp.NewToolResultError(err.Error()), nil
+	}
+
+	return mcp.NewToolResultJSON(ListTasksResponse{
+		Tasks: tasks,
+		Count: len(tasks),
+	})
+}
+
+func (s *Server) handleTasksCreateTask(ctx context.Context, request mcp.CallToolRequest) (*mcp.CallToolResult, error) {
+	title, err := request.RequireString("title")
+	if err != nil {
+		return mcp.NewToolResultError(err.Error()), nil
+	}
+
+	tasklistID := request.GetString("tasklist_id", "@default")
+	notes := request.GetString("notes", "")
+	due := request.GetString("due", "")
+	parent := request.GetString("parent", "")
+
+	task := &googletasks.Task{
+		Title: title,
+	}
+	if notes != "" {
+		task.Notes = notes
+	}
+	if due != "" {
+		task.Due = due
+	}
+
+	created, err := s.tasks.CreateTask(ctx, tasklistID, task, parent)
+	if err != nil {
+		return mcp.NewToolResultError(err.Error()), nil
+	}
+
+	return mcp.NewToolResultJSON(created)
+}
+
+func (s *Server) handleTasksUpdateTask(ctx context.Context, request mcp.CallToolRequest) (*mcp.CallToolResult, error) {
+	taskID, err := request.RequireString("task_id")
+	if err != nil {
+		return mcp.NewToolResultError(err.Error()), nil
+	}
+
+	tasklistID := request.GetString("tasklist_id", "@default")
+	title := request.GetString("title", "")
+	notes := request.GetString("notes", "")
+	due := request.GetString("due", "")
+	status := request.GetString("status", "")
+
+	task := &googletasks.Task{}
+	if title != "" {
+		task.Title = title
+	}
+	if notes != "" {
+		task.Notes = notes
+	}
+	if due != "" {
+		task.Due = due
+	}
+	if status != "" {
+		task.Status = status
+	}
+
+	updated, err := s.tasks.UpdateTask(ctx, tasklistID, taskID, task)
+	if err != nil {
+		return mcp.NewToolResultError(err.Error()), nil
+	}
+
+	return mcp.NewToolResultJSON(updated)
+}
+
+func (s *Server) handleTasksDeleteTask(ctx context.Context, request mcp.CallToolRequest) (*mcp.CallToolResult, error) {
+	taskID, err := request.RequireString("task_id")
+	if err != nil {
+		return mcp.NewToolResultError(err.Error()), nil
+	}
+
+	tasklistID := request.GetString("tasklist_id", "@default")
+
+	err = s.tasks.DeleteTask(ctx, tasklistID, taskID)
+	if err != nil {
+		return mcp.NewToolResultError(err.Error()), nil
+	}
+
+	return mcp.NewToolResultJSON(map[string]string{
+		"status":  "deleted",
+		"task_id": taskID,
+	})
 }
 
 // Auth tool handlers

@@ -170,6 +170,28 @@ func TestServer_HandlePeopleGetContact(t *testing.T) {
 	assert.NotNil(t, result)
 }
 
+func TestServer_HasTasksTools(t *testing.T) {
+	t.Setenv("ISH_MODE", "true")
+
+	srv, err := NewServer(context.Background())
+	require.NoError(t, err)
+
+	tools := srv.ListTools()
+	toolNames := make(map[string]bool)
+	for _, tool := range tools {
+		toolNames[tool.Name] = true
+	}
+
+	assert.True(t, toolNames["tasks_list_tasklists"])
+	assert.True(t, toolNames["tasks_create_tasklist"])
+	assert.True(t, toolNames["tasks_update_tasklist"])
+	assert.True(t, toolNames["tasks_delete_tasklist"])
+	assert.True(t, toolNames["tasks_list_tasks"])
+	assert.True(t, toolNames["tasks_create_task"])
+	assert.True(t, toolNames["tasks_update_task"])
+	assert.True(t, toolNames["tasks_delete_task"])
+}
+
 func TestExtractAuthCode(t *testing.T) {
 	tests := []struct {
 		name     string

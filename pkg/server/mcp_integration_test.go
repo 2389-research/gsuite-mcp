@@ -871,6 +871,15 @@ func TestToolRegistrationCompleteness(t *testing.T) {
 		"people_create_contact",
 		"people_update_contact",
 		"people_delete_contact",
+		// Tasks tools
+		"tasks_list_tasklists",
+		"tasks_create_tasklist",
+		"tasks_update_tasklist",
+		"tasks_delete_tasklist",
+		"tasks_list_tasks",
+		"tasks_create_task",
+		"tasks_update_task",
+		"tasks_delete_task",
 		// Auth tools
 		"auth_status",
 		"auth_info",
