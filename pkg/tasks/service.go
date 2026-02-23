@@ -98,3 +98,81 @@ func (s *Service) DeleteTaskList(ctx context.Context, tasklistID string) error {
 		return s.svc.Tasklists.Delete(tasklistID).Context(ctx).Do()
 	}, 3, time.Second)
 }
+
+// ListTasks returns tasks from a task list
+func (s *Service) ListTasks(ctx context.Context, tasklistID string, showCompleted, showHidden bool, dueMin, dueMax string) ([]*tasks.Task, error) {
+	if tasklistID == "" {
+		tasklistID = "@default"
+	}
+
+	var result *tasks.Tasks
+	err := retry.WithRetry(func() error {
+		call := s.svc.Tasks.List(tasklistID).Context(ctx).MaxResults(100)
+		call = call.ShowCompleted(showCompleted)
+		call = call.ShowHidden(showHidden)
+		if dueMin != "" {
+			call = call.DueMin(dueMin)
+		}
+		if dueMax != "" {
+			call = call.DueMax(dueMax)
+		}
+		var err error
+		result, err = call.Do()
+		return err
+	}, 3, time.Second)
+	if err != nil {
+		return nil, fmt.Errorf("failed to list tasks: %w", err)
+	}
+	return result.Items, nil
+}
+
+// CreateTask creates a task in a task list
+func (s *Service) CreateTask(ctx context.Context, tasklistID string, task *tasks.Task, parent string) (*tasks.Task, error) {
+	if tasklistID == "" {
+		tasklistID = "@default"
+	}
+
+	var result *tasks.Task
+	err := retry.WithRetry(func() error {
+		call := s.svc.Tasks.Insert(tasklistID, task).Context(ctx)
+		if parent != "" {
+			call = call.Parent(parent)
+		}
+		var err error
+		result, err = call.Do()
+		return err
+	}, 3, time.Second)
+	if err != nil {
+		return nil, fmt.Errorf("failed to create task: %w", err)
+	}
+	return result, nil
+}
+
+// UpdateTask updates a task
+func (s *Service) UpdateTask(ctx context.Context, tasklistID, taskID string, task *tasks.Task) (*tasks.Task, error) {
+	if tasklistID == "" {
+		tasklistID = "@default"
+	}
+
+	var result *tasks.Task
+	err := retry.WithRetry(func() error {
+		var err error
+		result, err = s.svc.Tasks.Patch(tasklistID, taskID, task).Context(ctx).Do()
+		return err
+	}, 3, time.Second)
+	if err != nil {
+		return nil, fmt.Errorf("failed to update task: %w", err)
+	}
+	return result, nil
+}
+
+// DeleteTask deletes a task
+func (s *Service) DeleteTask(ctx context.Context, tasklistID, taskID string) error {
+	if tasklistID == "" {
+		tasklistID = "@default"
+	}
+
+	return retry.WithRetry(func() error {
+		return s.svc.Tasks.Delete(tasklistID, taskID).Context(ctx).Do()
+	}, 3, time.Second)
+}
