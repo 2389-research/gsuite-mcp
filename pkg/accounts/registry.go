@@ -11,6 +11,7 @@ import (
 	"path/filepath"
 	"sort"
 	"strings"
+	"sync"
 )
 
 // Account represents a single Google account with its token path
@@ -25,6 +26,7 @@ type Registry struct {
 	configPath   string
 	DefaultAlias string              `json:"default"`
 	Accounts     map[string]*Account `json:"accounts"`
+	mu           sync.RWMutex        // protects Accounts map
 }
 
 // configFile is the JSON structure on disk
@@ -81,7 +83,9 @@ func (r *Registry) Resolve(alias string) (*Account, error) {
 		alias = r.DefaultAlias
 	}
 
+	r.mu.RLock()
 	acct, ok := r.Accounts[alias]
+	r.mu.RUnlock()
 	if !ok {
 		available := r.ListAccounts()
 		return nil, fmt.Errorf("unknown account '%s'. Available accounts: %s", alias, strings.Join(available, ", "))
@@ -96,16 +100,20 @@ func (r *Registry) GetDefault() (*Account, error) {
 
 // ListAccounts returns all account aliases sorted alphabetically
 func (r *Registry) ListAccounts() []string {
+	r.mu.RLock()
 	aliases := make([]string, 0, len(r.Accounts))
 	for alias := range r.Accounts {
 		aliases = append(aliases, alias)
 	}
+	r.mu.RUnlock()
 	sort.Strings(aliases)
 	return aliases
 }
 
 // AddAccount adds a new account to the registry and persists the config
 func (r *Registry) AddAccount(alias, tokenPath string) error {
+	r.mu.Lock()
+	defer r.mu.Unlock()
 	r.Accounts[alias] = &Account{
 		Alias:     alias,
 		TokenPath: tokenPath,

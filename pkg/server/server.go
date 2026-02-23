@@ -12,6 +12,7 @@ import (
 	"path/filepath"
 	"sort"
 	"strings"
+	"sync"
 	"time"
 
 	"github.com/harper/gsuite-mcp/pkg/accounts"
@@ -38,10 +39,11 @@ type AccountServices struct {
 
 // Server is the MCP server for GSuite APIs
 type Server struct {
-	registry *accounts.Registry
-	services map[string]*AccountServices
-	mcp      *server.MCPServer
-	auth     *auth.Authenticator // For auth management tools
+	registry   *accounts.Registry
+	services   map[string]*AccountServices
+	servicesMu sync.RWMutex // protects services map
+	mcp        *server.MCPServer
+	auth       *auth.Authenticator // For auth management tools
 }
 
 // NewServer creates a new MCP server
@@ -134,11 +136,23 @@ func (s *Server) resolveServices(ctx context.Context, alias string) (*AccountSer
 		return nil, err
 	}
 
+	// Fast path: check if services already exist
+	s.servicesMu.RLock()
+	if svc, ok := s.services[acct.Alias]; ok {
+		s.servicesMu.RUnlock()
+		return svc, nil
+	}
+	s.servicesMu.RUnlock()
+
+	// Slow path: create services (need write lock)
+	s.servicesMu.Lock()
+	defer s.servicesMu.Unlock()
+
+	// Double-check after acquiring write lock
 	if svc, ok := s.services[acct.Alias]; ok {
 		return svc, nil
 	}
 
-	// Lazy init: create services for this account
 	client := acct.Client
 	if client == nil {
 		client = &http.Client{}
@@ -2146,7 +2160,9 @@ func (s *Server) handleAuthComplete(ctx context.Context, request mcp.CallToolReq
 		if clientErr == nil && client != nil {
 			acct.Client = client
 			// Evict cached services so they'll be recreated with the new client
+			s.servicesMu.Lock()
 			delete(s.services, acct.Alias)
+			s.servicesMu.Unlock()
 		}
 	}
 
@@ -2193,7 +2209,9 @@ func (s *Server) handleAuthRevoke(ctx context.Context, request mcp.CallToolReque
 	acct, resolveErr := s.registry.Resolve(account)
 	if resolveErr == nil {
 		acct.Client = nil
+		s.servicesMu.Lock()
 		delete(s.services, acct.Alias)
+		s.servicesMu.Unlock()
 	}
 
 	return mcp.NewToolResultJSON(AuthRevokeResponse{

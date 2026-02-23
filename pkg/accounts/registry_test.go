@@ -111,3 +111,32 @@ func TestRegistry_AddAccount(t *testing.T) {
 	_, err = os.Stat(configPath)
 	assert.NoError(t, err)
 }
+
+func TestRegistry_ConcurrentAccess(t *testing.T) {
+	dir := t.TempDir()
+	configPath := filepath.Join(dir, "accounts.json")
+
+	reg := &Registry{
+		configPath:   configPath,
+		DefaultAlias: "default",
+		Accounts: map[string]*Account{
+			"default": {Alias: "default", TokenPath: "/tmp/default.json"},
+		},
+	}
+
+	// Concurrent reads and writes should not race
+	done := make(chan struct{})
+	for i := 0; i < 10; i++ {
+		go func() {
+			defer func() { done <- struct{}{} }()
+			for j := 0; j < 100; j++ {
+				_, _ = reg.Resolve("default")
+				_ = reg.ListAccounts()
+			}
+		}()
+	}
+
+	for i := 0; i < 10; i++ {
+		<-done
+	}
+}
