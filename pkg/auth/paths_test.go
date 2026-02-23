@@ -189,6 +189,119 @@ func hasPathSuffix(path, suffix string) bool {
 	return len(path) >= len(suffix) && path[len(path)-len(suffix):] == suffix
 }
 
+func TestGetAccountsConfigPath(t *testing.T) {
+	tests := []struct {
+		name      string
+		override  string
+		xdgConfig string
+		wantExact string
+		wantSuffix string
+	}{
+		{
+			name:      "explicit override takes priority",
+			override:  "/custom/accounts.json",
+			xdgConfig: "/should/be/ignored",
+			wantExact: "/custom/accounts.json",
+		},
+		{
+			name:       "XDG_CONFIG_HOME when set",
+			override:   "",
+			xdgConfig:  "/tmp/xdg-config",
+			wantSuffix: "/tmp/xdg-config/gsuite-mcp/accounts.json",
+		},
+		{
+			name:       "falls back to ~/.config",
+			override:   "",
+			xdgConfig:  "",
+			wantSuffix: ".config/gsuite-mcp/accounts.json",
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			t.Setenv("GSUITE_MCP_ACCOUNTS_PATH", tt.override)
+			t.Setenv("XDG_CONFIG_HOME", tt.xdgConfig)
+
+			got := GetAccountsConfigPath()
+
+			if tt.wantExact != "" {
+				if got != tt.wantExact {
+					t.Errorf("GetAccountsConfigPath() = %q, want %q", got, tt.wantExact)
+				}
+			} else if tt.wantSuffix != "" {
+				if tt.xdgConfig != "" {
+					// Exact match for XDG case
+					if got != tt.wantSuffix {
+						t.Errorf("GetAccountsConfigPath() = %q, want %q", got, tt.wantSuffix)
+					}
+				} else {
+					// Suffix match for home dir case
+					if !hasPathSuffix(got, tt.wantSuffix) {
+						t.Errorf("GetAccountsConfigPath() = %q, want suffix %q", got, tt.wantSuffix)
+					}
+				}
+			}
+		})
+	}
+}
+
+func TestGetAccountsConfigPath_PathNormalization(t *testing.T) {
+	tests := []struct {
+		name     string
+		override string
+		want     string
+	}{
+		{
+			name:     "normalizes path traversal sequences",
+			override: "/home/user/../../../etc/accounts.json",
+			want:     "/etc/accounts.json",
+		},
+		{
+			name:     "normalizes redundant slashes",
+			override: "/home//user///accounts.json",
+			want:     "/home/user/accounts.json",
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			t.Setenv("GSUITE_MCP_ACCOUNTS_PATH", tt.override)
+			t.Setenv("XDG_CONFIG_HOME", "")
+
+			got := GetAccountsConfigPath()
+			if got != tt.want {
+				t.Errorf("GetAccountsConfigPath() = %q, want %q", got, tt.want)
+			}
+		})
+	}
+}
+
+func TestGetAccountsConfigPath_RelativeXDG(t *testing.T) {
+	t.Setenv("GSUITE_MCP_ACCOUNTS_PATH", "")
+	t.Setenv("XDG_CONFIG_HOME", "./relative/config") // Relative path should be ignored
+
+	got := GetAccountsConfigPath()
+	// Should NOT contain the relative path; should fall back to ~/.config
+	if hasPathSuffix(got, "relative/config/gsuite-mcp/accounts.json") {
+		t.Errorf("GetAccountsConfigPath() used relative XDG path: %q", got)
+	}
+	// Should contain the home fallback
+	if !hasPathSuffix(got, ".config/gsuite-mcp/accounts.json") {
+		t.Errorf("GetAccountsConfigPath() = %q, expected suffix .config/gsuite-mcp/accounts.json", got)
+	}
+}
+
+func TestGetAccountsConfigPath_HomeDirFailure(t *testing.T) {
+	t.Setenv("GSUITE_MCP_ACCOUNTS_PATH", "")
+	t.Setenv("XDG_CONFIG_HOME", "")
+	t.Setenv("HOME", "")
+
+	got := GetAccountsConfigPath()
+	if got == "" {
+		t.Error("GetAccountsConfigPath() returned empty string")
+	}
+}
+
 // TestGetCredentialsPath_PathNormalization verifies that filepath.Clean normalizes
 // paths for consistent handling. Note: env var overrides allow arbitrary paths by
 // design for power users; this tests normalization, not restriction.

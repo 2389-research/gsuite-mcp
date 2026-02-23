@@ -12,6 +12,7 @@ const (
 	appName             = "gsuite-mcp"
 	defaultCredentials  = "credentials.json"
 	defaultToken        = "token.json"
+	defaultAccounts     = "accounts.json"
 	configSubdir        = ".config"
 	dataSubdir          = ".local/share"
 )
@@ -60,6 +61,29 @@ func GetTokenPath() string {
 	}
 
 	return filepath.Clean(filepath.Join(dataHome, appName, defaultToken))
+}
+
+// GetAccountsConfigPath returns the path to the accounts config file
+// Priority: GSUITE_MCP_ACCOUNTS_PATH > XDG_CONFIG_HOME > ~/.config
+// Note: Empty env vars are treated as unset (falls through to next priority).
+// Env var overrides allow arbitrary paths for power users who need flexibility.
+// XDG vars must be absolute paths per the XDG spec; relative paths are ignored.
+// All paths are normalized with filepath.Clean for consistent path handling.
+func GetAccountsConfigPath() string {
+	if override := os.Getenv("GSUITE_MCP_ACCOUNTS_PATH"); override != "" {
+		return filepath.Clean(override)
+	}
+
+	configHome := os.Getenv("XDG_CONFIG_HOME")
+	if configHome == "" || !filepath.IsAbs(configHome) {
+		home, err := os.UserHomeDir()
+		if err != nil {
+			return defaultAccounts // fallback to cwd
+		}
+		configHome = filepath.Join(home, configSubdir)
+	}
+
+	return filepath.Clean(filepath.Join(configHome, appName, defaultAccounts))
 }
 
 // EnsureDir creates the parent directory for a file path if it doesn't exist.
