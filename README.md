@@ -254,6 +254,73 @@ For development and testing without real credentials:
 
 All API requests use fake Bearer token authentication and connect to mock server.
 
+## Multi-Account Support
+
+The server supports multiple Google accounts (e.g., personal and work) through an accounts registry. Each account has its own OAuth token, and you can specify which account to use on a per-request basis.
+
+### Configuration
+
+Accounts are configured in `~/.config/gsuite-mcp/accounts.json`:
+
+```json
+{
+  "default": "work",
+  "accounts": {
+    "work": {
+      "token_path": "~/.local/share/gsuite-mcp/tokens/work.json"
+    },
+    "personal": {
+      "token_path": "~/.local/share/gsuite-mcp/tokens/personal.json"
+    }
+  }
+}
+```
+
+### Setup via CLI
+
+Use the `--account` flag with the `setup` command to authenticate each account:
+
+```bash
+# Set up a work account
+./gsuite-mcp setup --account work
+
+# Set up a personal account
+./gsuite-mcp setup --account personal
+
+# Verify an account
+./gsuite-mcp whoami --account work
+```
+
+If the account alias doesn't exist yet, the setup command creates it automatically.
+
+### Setup via MCP Auth Tools
+
+When running as an MCP server, agents can authenticate accounts programmatically:
+
+```
+auth_init(account: "work")                          # Get auth URL for work account
+auth_complete(account: "work", code: "...")          # Complete auth with code
+auth_init(account: "personal")                       # Get auth URL for personal account
+auth_complete(account: "personal", code: "...")       # Complete auth
+```
+
+### Usage in Tool Calls
+
+Pass the `account` parameter to any tool to target a specific account:
+
+```
+gmail_list_messages(query: "is:unread", account: "work")
+calendar_list_events(account: "personal")
+tasks_list_tasks(account: "work")
+accounts_list()  # See all configured accounts and their status
+```
+
+If no `account` parameter is provided, the server uses the default account from `accounts.json`.
+
+### Backward Compatibility
+
+If no `accounts.json` file exists, the server uses the legacy single-account token path (`~/.local/share/gsuite-mcp/token.json`). Existing single-account users do not need to change anything.
+
 ## Security
 
 - **Credentials**: Never commit `credentials.json` or `token.json` to version control

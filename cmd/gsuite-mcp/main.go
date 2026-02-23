@@ -18,7 +18,7 @@ import (
 	"github.com/harper/gsuite-mcp/pkg/server"
 )
 
-const version = "1.0.3"
+const version = "1.1.0"
 
 func main() {
 	if len(os.Args) < 2 {

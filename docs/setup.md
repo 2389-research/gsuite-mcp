@@ -260,15 +260,29 @@ export GOOGLE_CREDENTIALS_PATH=/custom/path/credentials.json
 
 ### Multiple Accounts
 
-Run separate instances with different token files:
+The server includes a built-in accounts registry that supports multiple Google accounts. Each account gets its own OAuth token, and you can switch between them per request.
+
+**Set up named accounts:**
 
 ```bash
-# Account 1
-GOOGLE_TOKEN_PATH=token-account1.json ./gsuite-mcp
+# Authenticate a work account
+./gsuite-mcp setup --account work
 
-# Account 2
-GOOGLE_TOKEN_PATH=token-account2.json ./gsuite-mcp
+# Authenticate a personal account
+./gsuite-mcp setup --account personal
+
+# Verify accounts
+./gsuite-mcp whoami --account work
+./gsuite-mcp whoami --account personal
 ```
+
+The accounts registry is stored at `~/.config/gsuite-mcp/accounts.json`. Running `setup --account <alias>` creates the account entry automatically if it does not exist.
+
+**Use accounts in MCP tool calls:**
+
+Pass `account: "<alias>"` to any tool. If omitted, the default account is used. Use `accounts_list()` to see all configured accounts.
+
+See the [README](../README.md#multi-account-support) for full configuration details and MCP auth tool examples.
 
 ## Next Steps
 
