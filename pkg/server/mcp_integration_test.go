@@ -236,7 +236,7 @@ func TestMCPPromptListingAndExecution(t *testing.T) {
 	}
 }
 
-// TestMCPResourceEndpointsReturnValidJSON tests all 8 resource endpoints
+// TestMCPResourceEndpointsReturnValidJSON tests all 11 resource endpoints
 // Note: This test requires ISH_MODE to be set and an ish server running.
 // It skips if the server is not available to allow unit testing.
 func TestMCPResourceEndpointsReturnValidJSON(t *testing.T) {
@@ -404,6 +404,58 @@ func TestMCPResourceEndpointsReturnValidJSON(t *testing.T) {
 				assert.Contains(t, data, "draft_count")
 				assert.Contains(t, data, "drafts")
 				assert.Contains(t, data, "timestamp")
+			},
+		},
+		{
+			name:    "today_tasks",
+			uri:     "gsuite://tasks/today",
+			handler: srv.handleTodayTasksResource,
+			validate: func(t *testing.T, contents []mcp.ResourceContents) {
+				require.Len(t, contents, 1)
+				textContent := contents[0].(mcp.TextResourceContents)
+				assert.Equal(t, "application/json", textContent.MIMEType)
+
+				var data map[string]interface{}
+				err := json.Unmarshal([]byte(textContent.Text), &data)
+				require.NoError(t, err, "Response should be valid JSON")
+				assert.Contains(t, data, "date")
+				assert.Contains(t, data, "task_count")
+				assert.Contains(t, data, "tasks")
+			},
+		},
+		{
+			name:    "upcoming_tasks",
+			uri:     "gsuite://tasks/upcoming",
+			handler: srv.handleUpcomingTasksResource,
+			validate: func(t *testing.T, contents []mcp.ResourceContents) {
+				require.Len(t, contents, 1)
+				textContent := contents[0].(mcp.TextResourceContents)
+				assert.Equal(t, "application/json", textContent.MIMEType)
+
+				var data map[string]interface{}
+				err := json.Unmarshal([]byte(textContent.Text), &data)
+				require.NoError(t, err, "Response should be valid JSON")
+				assert.Contains(t, data, "from")
+				assert.Contains(t, data, "to")
+				assert.Contains(t, data, "task_count")
+				assert.Contains(t, data, "tasks")
+			},
+		},
+		{
+			name:    "overdue_tasks",
+			uri:     "gsuite://tasks/overdue",
+			handler: srv.handleOverdueTasksResource,
+			validate: func(t *testing.T, contents []mcp.ResourceContents) {
+				require.Len(t, contents, 1)
+				textContent := contents[0].(mcp.TextResourceContents)
+				assert.Equal(t, "application/json", textContent.MIMEType)
+
+				var data map[string]interface{}
+				err := json.Unmarshal([]byte(textContent.Text), &data)
+				require.NoError(t, err, "Response should be valid JSON")
+				assert.Contains(t, data, "as_of")
+				assert.Contains(t, data, "task_count")
+				assert.Contains(t, data, "tasks")
 			},
 		},
 	}

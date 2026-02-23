@@ -101,6 +101,39 @@ func (s *Server) registerResources() {
 		),
 		s.handleDraftsResource,
 	)
+
+	// Today's tasks
+	s.mcp.AddResource(
+		mcp.NewResource(
+			"gsuite://tasks/today",
+			"Today's Tasks",
+			mcp.WithResourceDescription("Tasks due today"),
+			mcp.WithMIMEType("application/json"),
+		),
+		s.handleTodayTasksResource,
+	)
+
+	// Upcoming tasks
+	s.mcp.AddResource(
+		mcp.NewResource(
+			"gsuite://tasks/upcoming",
+			"Upcoming Tasks",
+			mcp.WithResourceDescription("Tasks due in the next 7 days"),
+			mcp.WithMIMEType("application/json"),
+		),
+		s.handleUpcomingTasksResource,
+	)
+
+	// Overdue tasks
+	s.mcp.AddResource(
+		mcp.NewResource(
+			"gsuite://tasks/overdue",
+			"Overdue Tasks",
+			mcp.WithResourceDescription("Overdue incomplete tasks"),
+			mcp.WithMIMEType("application/json"),
+		),
+		s.handleOverdueTasksResource,
+	)
 }
 
 // Resource handlers
@@ -395,6 +428,92 @@ func (s *Server) handleDraftsResource(ctx context.Context, request mcp.ReadResou
 		"draft_count": len(drafts),
 		"drafts":      drafts,
 		"timestamp":   time.Now().Format(time.RFC3339),
+	}, "", "  ")
+	if err != nil {
+		return nil, err
+	}
+
+	return []mcp.ResourceContents{
+		mcp.TextResourceContents{
+			URI:      request.Params.URI,
+			MIMEType: "application/json",
+			Text:     string(data),
+		},
+	}, nil
+}
+
+func (s *Server) handleTodayTasksResource(ctx context.Context, request mcp.ReadResourceRequest) ([]mcp.ResourceContents, error) {
+	now := time.Now()
+	startOfDay := time.Date(now.Year(), now.Month(), now.Day(), 0, 0, 0, 0, now.Location())
+	endOfDay := startOfDay.Add(24 * time.Hour)
+
+	tasks, err := s.tasks.ListTasks(ctx, "@default", false, false, startOfDay.Format(time.RFC3339), endOfDay.Format(time.RFC3339))
+	if err != nil {
+		return nil, fmt.Errorf("failed to fetch today's tasks: %w", err)
+	}
+
+	data, err := json.MarshalIndent(map[string]interface{}{
+		"date":       startOfDay.Format("2006-01-02"),
+		"task_count": len(tasks),
+		"tasks":      tasks,
+	}, "", "  ")
+	if err != nil {
+		return nil, err
+	}
+
+	return []mcp.ResourceContents{
+		mcp.TextResourceContents{
+			URI:      request.Params.URI,
+			MIMEType: "application/json",
+			Text:     string(data),
+		},
+	}, nil
+}
+
+func (s *Server) handleUpcomingTasksResource(ctx context.Context, request mcp.ReadResourceRequest) ([]mcp.ResourceContents, error) {
+	now := time.Now()
+	startOfDay := time.Date(now.Year(), now.Month(), now.Day(), 0, 0, 0, 0, now.Location())
+	endOfWeek := startOfDay.Add(7 * 24 * time.Hour)
+
+	tasks, err := s.tasks.ListTasks(ctx, "@default", false, false, startOfDay.Format(time.RFC3339), endOfWeek.Format(time.RFC3339))
+	if err != nil {
+		return nil, fmt.Errorf("failed to fetch upcoming tasks: %w", err)
+	}
+
+	data, err := json.MarshalIndent(map[string]interface{}{
+		"from":       startOfDay.Format("2006-01-02"),
+		"to":         endOfWeek.Format("2006-01-02"),
+		"task_count": len(tasks),
+		"tasks":      tasks,
+	}, "", "  ")
+	if err != nil {
+		return nil, err
+	}
+
+	return []mcp.ResourceContents{
+		mcp.TextResourceContents{
+			URI:      request.Params.URI,
+			MIMEType: "application/json",
+			Text:     string(data),
+		},
+	}, nil
+}
+
+func (s *Server) handleOverdueTasksResource(ctx context.Context, request mcp.ReadResourceRequest) ([]mcp.ResourceContents, error) {
+	now := time.Now()
+	startOfDay := time.Date(now.Year(), now.Month(), now.Day(), 0, 0, 0, 0, now.Location())
+	// From epoch to start of today to find overdue tasks
+	epoch := time.Date(1970, 1, 1, 0, 0, 0, 0, time.UTC)
+
+	tasks, err := s.tasks.ListTasks(ctx, "@default", false, false, epoch.Format(time.RFC3339), startOfDay.Format(time.RFC3339))
+	if err != nil {
+		return nil, fmt.Errorf("failed to fetch overdue tasks: %w", err)
+	}
+
+	data, err := json.MarshalIndent(map[string]interface{}{
+		"as_of":      startOfDay.Format("2006-01-02"),
+		"task_count": len(tasks),
+		"tasks":      tasks,
 	}, "", "  ")
 	if err != nil {
 		return nil, err
