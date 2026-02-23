@@ -17,9 +17,10 @@ import (
 
 	"golang.org/x/oauth2"
 	"golang.org/x/oauth2/google"
-	"google.golang.org/api/gmail/v1"
 	"google.golang.org/api/calendar/v3"
+	"google.golang.org/api/gmail/v1"
 	"google.golang.org/api/people/v1"
+	"google.golang.org/api/tasks/v1"
 )
 
 // DefaultScopes are the OAuth scopes for full GSuite access
@@ -28,6 +29,7 @@ var DefaultScopes = []string{
 	gmail.GmailLabelsScope,
 	calendar.CalendarScope,
 	people.ContactsScope,
+	tasks.TasksScope,
 }
 
 // Authenticator handles OAuth 2.0 authentication
