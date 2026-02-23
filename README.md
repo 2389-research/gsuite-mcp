@@ -1,6 +1,6 @@
 # GSuite MCP Server (Go)
 
-A Model Context Protocol (MCP) server that provides programmatic access to Google Workspace APIs including Gmail, Google Calendar, and Google Contacts. Built in Go for performance and reliability.
+A Model Context Protocol (MCP) server that provides programmatic access to Google Workspace APIs including Gmail, Google Calendar, Google Contacts, and Google Tasks. Built in Go for performance and reliability.
 
 ![GSuite MCP Server](docs/gsuite_mcp.png)
 
@@ -9,6 +9,7 @@ A Model Context Protocol (MCP) server that provides programmatic access to Googl
 - **Gmail Integration**: Full CRUD operations - list, get, send, create drafts, modify labels, delete messages
 - **Calendar Access**: Complete calendar management - view, create, update, delete events
 - **Contacts Management**: Full contacts API - list, search, get, create, update, delete contacts
+- **Tasks Management**: Full task lists and tasks API - list, create, update, delete task lists and tasks
 - **MCP Prompts**: Pre-defined workflow templates for common tasks (email triage, meeting scheduling, etc.)
 - **MCP Resources**: Dynamic data endpoints exposing calendar, email, and contact information
 - **OAuth 2.0 Authentication**: Secure access to your Google Workspace data
@@ -18,7 +19,7 @@ A Model Context Protocol (MCP) server that provides programmatic access to Googl
 
 ## Available Tools
 
-The server exposes 19 MCP tools organized by service:
+The server exposes 27 MCP tools organized by service:
 
 ### Gmail Tools (7)
 1. **gmail_list_messages** - Search and list Gmail messages
@@ -45,11 +46,21 @@ The server exposes 19 MCP tools organized by service:
 18. **people_update_contact** - Update an existing contact
 19. **people_delete_contact** - Delete a contact
 
+### Tasks Tools (8)
+20. **tasks_list_tasklists** - List all task lists
+21. **tasks_create_tasklist** - Create a new task list
+22. **tasks_update_tasklist** - Update a task list's title
+23. **tasks_delete_tasklist** - Delete a task list
+24. **tasks_list_tasks** - List tasks in a task list
+25. **tasks_create_task** - Create a new task
+26. **tasks_update_task** - Update an existing task
+27. **tasks_delete_task** - Delete a task
+
 See [docs/usage.md](docs/usage.md) for detailed tool documentation and examples.
 
 ## MCP Prompts
 
-The server provides 8 workflow prompts for common tasks:
+The server provides 10 workflow prompts for common tasks:
 
 ### Email Workflows
 1. **email_triage** - Help triage and organize unread emails (never deletes, only archives)
@@ -65,9 +76,13 @@ The server provides 8 workflow prompts for common tasks:
 7. **find_contact** - Search for contact information with CRM integration guidance
 8. **add_contact_from_email** - Extract and add contact information from emails with full CRM workflow (duplicate checking, company association, interaction logging)
 
+### Tasks Workflows
+9. **task_review** - Review and organize pending tasks across all task lists
+10. **plan_tasks** - Break down a goal into actionable tasks
+
 ## MCP Resources
 
-The server exposes 8 dynamic resources:
+The server exposes 11 dynamic resources:
 
 1. **gsuite://calendar/today** - Today's calendar events
 2. **gsuite://calendar/this-week** - This week's calendar events
@@ -77,13 +92,16 @@ The server exposes 8 dynamic resources:
 6. **gsuite://gmail/unread/important** - Important unread emails
 7. **gsuite://gmail/drafts** - Current draft emails
 8. **gsuite://contacts/recent** - Recently added/modified contacts
+9. **gsuite://tasks/today** - Tasks due today
+10. **gsuite://tasks/upcoming** - Tasks due in the next 7 days
+11. **gsuite://tasks/overdue** - Overdue incomplete tasks
 
 ## Quick Start
 
 ### Prerequisites
 
 - Go 1.21 or later
-- Google Cloud account with Gmail, Calendar, and People APIs enabled
+- Google Cloud account with Gmail, Calendar, People, and Tasks APIs enabled
 - OAuth 2.0 credentials (see [setup guide](docs/setup.md))
 
 ### Build
@@ -146,6 +164,8 @@ gsuite-mcp/
 │   │   └── service.go       # Calendar API wrapper
 │   ├── people/
 │   │   └── service.go       # People API wrapper
+│   ├── tasks/
+│   │   └── service.go       # Tasks API wrapper
 │   ├── retry/
 │   │   └── retry.go         # Exponential backoff logic
 │   └── server/
@@ -170,6 +190,7 @@ Run specific package tests:
 go test ./pkg/gmail -v
 go test ./pkg/calendar -v
 go test ./pkg/people -v
+go test ./pkg/tasks -v
 go test ./pkg/server -v
 ```
 
@@ -205,6 +226,7 @@ ish server start --port 9000
   - `google.golang.org/api/gmail/v1`
   - `google.golang.org/api/calendar/v3`
   - `google.golang.org/api/people/v1`
+  - `google.golang.org/api/tasks/v1`
 - **OAuth**: `golang.org/x/oauth2`
 - **MCP SDK**: `github.com/mark3labs/mcp-go`
 - **Testing**: `github.com/stretchr/testify`
