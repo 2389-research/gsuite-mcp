@@ -4,6 +4,7 @@
 package accounts
 
 import (
+	"net/http"
 	"os"
 	"path/filepath"
 	"testing"
@@ -110,6 +111,111 @@ func TestRegistry_AddAccount(t *testing.T) {
 	// Verify file was written
 	_, err = os.Stat(configPath)
 	assert.NoError(t, err)
+}
+
+func TestValidateAlias(t *testing.T) {
+	tests := []struct {
+		alias   string
+		wantErr bool
+	}{
+		{"work", false},
+		{"personal", false},
+		{"my-account", false},
+		{"account_1", false},
+		{"a.b.c", false},
+		{"", true},                   // empty
+		{"../evil", true},            // path traversal
+		{"../../etc/passwd", true},   // path traversal
+		{"/absolute", true},          // starts with slash
+		{"hello world", true},        // spaces
+		{"-leading-dash", true},      // starts with non-alphanumeric
+		{"a" + string(make([]byte, 64)), true}, // too long
+	}
+
+	for _, tt := range tests {
+		err := ValidateAlias(tt.alias)
+		if tt.wantErr {
+			assert.Error(t, err, "alias=%q should be invalid", tt.alias)
+		} else {
+			assert.NoError(t, err, "alias=%q should be valid", tt.alias)
+		}
+	}
+}
+
+func TestRegistry_AddAccount_RejectsInvalidAlias(t *testing.T) {
+	dir := t.TempDir()
+	configPath := filepath.Join(dir, "accounts.json")
+
+	reg := &Registry{
+		configPath:   configPath,
+		DefaultAlias: "default",
+		Accounts:     map[string]*Account{},
+	}
+
+	err := reg.AddAccount("../../evil", "/tmp/evil.json")
+	require.Error(t, err)
+	assert.Contains(t, err.Error(), "invalid characters")
+}
+
+func TestRegistry_AddAccount_RejectsDuplicate(t *testing.T) {
+	dir := t.TempDir()
+	configPath := filepath.Join(dir, "accounts.json")
+
+	reg := &Registry{
+		configPath:   configPath,
+		DefaultAlias: "default",
+		Accounts: map[string]*Account{
+			"work": {Alias: "work", TokenPath: "/tmp/work.json"},
+		},
+	}
+
+	err := reg.AddAccount("work", "/tmp/work2.json")
+	require.Error(t, err)
+	assert.Contains(t, err.Error(), "already exists")
+}
+
+func TestLoadRegistry_InvalidDefaultAlias(t *testing.T) {
+	dir := t.TempDir()
+	configPath := filepath.Join(dir, "accounts.json")
+	os.WriteFile(configPath, []byte(`{
+		"default": "nonexistent",
+		"accounts": {
+			"work": {"token_path": "/tmp/work.json"}
+		}
+	}`), 0600)
+
+	_, err := LoadRegistry(configPath)
+	require.Error(t, err)
+	assert.Contains(t, err.Error(), "default account 'nonexistent' not found")
+}
+
+func TestLoadRegistry_InvalidAliasInConfig(t *testing.T) {
+	dir := t.TempDir()
+	configPath := filepath.Join(dir, "accounts.json")
+	os.WriteFile(configPath, []byte(`{
+		"default": "../../evil",
+		"accounts": {
+			"../../evil": {"token_path": "/tmp/evil.json"}
+		}
+	}`), 0600)
+
+	_, err := LoadRegistry(configPath)
+	require.Error(t, err)
+	assert.Contains(t, err.Error(), "invalid account alias")
+}
+
+func TestAccount_ClientThreadSafety(t *testing.T) {
+	acct := &Account{Alias: "test"}
+
+	// Verify GetClient/SetClient work
+	assert.Nil(t, acct.GetClient())
+
+	client := &http.Client{}
+	acct.SetClient(client)
+	assert.Equal(t, client, acct.GetClient())
+
+	acct.SetClient(nil)
+	assert.Nil(t, acct.GetClient())
 }
 
 func TestRegistry_ConcurrentAccess(t *testing.T) {

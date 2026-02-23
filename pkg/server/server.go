@@ -55,10 +55,12 @@ func NewServer(ctx context.Context) (*Server, error) {
 	if os.Getenv("ISH_MODE") == "true" {
 		client = auth.NewFakeClient("")
 		// Build an in-memory registry with a single "default" account
+		defaultAcct := &accounts.Account{Alias: "default"}
+		defaultAcct.SetClient(client)
 		registry = &accounts.Registry{
 			DefaultAlias: "default",
 			Accounts: map[string]*accounts.Account{
-				"default": {Alias: "default", Client: client},
+				"default": defaultAcct,
 			},
 		}
 	} else {
@@ -90,7 +92,7 @@ func NewServer(ctx context.Context) (*Server, error) {
 		if err != nil {
 			return nil, fmt.Errorf("failed to get default account: %w", err)
 		}
-		defaultAcct.Client = client
+		defaultAcct.SetClient(client)
 	}
 
 	s := &Server{
@@ -100,15 +102,15 @@ func NewServer(ctx context.Context) (*Server, error) {
 	}
 
 	// Eagerly create services for the default account
-	defaultAcct, err := registry.GetDefault()
+	eagerAcct, err := registry.GetDefault()
 	if err != nil {
 		return nil, fmt.Errorf("failed to get default account: %w", err)
 	}
-	defaultClient := defaultAcct.Client
+	defaultClient := eagerAcct.GetClient()
 	if defaultClient == nil {
 		defaultClient = &http.Client{}
 	}
-	if _, err := s.createServicesForClient(ctx, defaultAcct.Alias, defaultClient); err != nil {
+	if _, err := s.createServicesForClient(ctx, eagerAcct.Alias, defaultClient); err != nil {
 		return nil, fmt.Errorf("failed to create services for default account: %w", err)
 	}
 
@@ -152,7 +154,7 @@ func (s *Server) resolveServices(ctx context.Context, alias string) (*AccountSer
 		return svc, nil
 	}
 
-	client := acct.Client
+	client := acct.GetClient()
 	if client == nil {
 		client = &http.Client{}
 	}
@@ -2070,6 +2072,13 @@ func (s *Server) handleAuthInit(ctx context.Context, request mcp.CallToolRequest
 		resolvedAlias = s.registry.DefaultAlias
 	}
 	if _, err := s.registry.Resolve(resolvedAlias); err != nil {
+		// Validate alias before creating
+		if valErr := accounts.ValidateAlias(resolvedAlias); valErr != nil {
+			return mcp.NewToolResultJSON(AuthInitResponse{
+				Status:  "error",
+				Message: fmt.Sprintf("invalid account alias: %v", valErr),
+			})
+		}
 		// Auto-create with a generated token path
 		tokenPath := auth.GenerateAccountTokenPath(resolvedAlias)
 		if addErr := s.registry.AddAccount(resolvedAlias, tokenPath); addErr != nil {
@@ -2156,7 +2165,7 @@ func (s *Server) handleAuthComplete(ctx context.Context, request mcp.CallToolReq
 	if resolveErr == nil {
 		client, clientErr := authenticator.GetClientIfAuthenticated(ctx)
 		if clientErr == nil && client != nil {
-			acct.Client = client
+			acct.SetClient(client)
 			// Evict cached services so they'll be recreated with the new client
 			s.servicesMu.Lock()
 			delete(s.services, acct.Alias)
@@ -2206,7 +2215,7 @@ func (s *Server) handleAuthRevoke(ctx context.Context, request mcp.CallToolReque
 	// Evict cached services for this account
 	acct, resolveErr := s.registry.Resolve(account)
 	if resolveErr == nil {
-		acct.Client = nil
+		acct.SetClient(nil)
 		s.servicesMu.Lock()
 		delete(s.services, acct.Alias)
 		s.servicesMu.Unlock()

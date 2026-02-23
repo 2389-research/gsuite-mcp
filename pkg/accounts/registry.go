@@ -9,16 +9,52 @@ import (
 	"net/http"
 	"os"
 	"path/filepath"
+	"regexp"
 	"sort"
 	"strings"
 	"sync"
 )
 
+// validAliasPattern restricts account aliases to safe characters only,
+// preventing path traversal attacks via crafted alias names.
+var validAliasPattern = regexp.MustCompile(`^[a-zA-Z0-9][a-zA-Z0-9._-]*$`)
+
+// ValidateAlias checks that an account alias contains only safe characters.
+// Aliases must start with an alphanumeric character and contain only
+// alphanumerics, hyphens, underscores, and dots.
+func ValidateAlias(alias string) error {
+	if alias == "" {
+		return fmt.Errorf("account alias cannot be empty")
+	}
+	if len(alias) > 64 {
+		return fmt.Errorf("account alias too long (max 64 characters)")
+	}
+	if !validAliasPattern.MatchString(alias) {
+		return fmt.Errorf("account alias '%s' contains invalid characters (use alphanumerics, hyphens, underscores, dots)", alias)
+	}
+	return nil
+}
+
 // Account represents a single Google account with its token path
 type Account struct {
 	Alias     string       `json:"-"`
 	TokenPath string       `json:"token_path"`
+	mu        sync.RWMutex // protects Client field
 	Client    *http.Client `json:"-"`
+}
+
+// GetClient returns the account's HTTP client in a thread-safe manner.
+func (a *Account) GetClient() *http.Client {
+	a.mu.RLock()
+	defer a.mu.RUnlock()
+	return a.Client
+}
+
+// SetClient sets the account's HTTP client in a thread-safe manner.
+func (a *Account) SetClient(client *http.Client) {
+	a.mu.Lock()
+	defer a.mu.Unlock()
+	a.Client = client
 }
 
 // Registry manages multiple Google accounts
@@ -68,9 +104,19 @@ func LoadRegistry(path string) (*Registry, error) {
 	}
 
 	for alias, entry := range cfg.Accounts {
+		if err := ValidateAlias(alias); err != nil {
+			return nil, fmt.Errorf("invalid account alias in config: %w", err)
+		}
 		reg.Accounts[alias] = &Account{
 			Alias:     alias,
 			TokenPath: entry.TokenPath,
+		}
+	}
+
+	// Validate that DefaultAlias references a known account (if accounts exist)
+	if len(reg.Accounts) > 0 && reg.DefaultAlias != "" {
+		if _, ok := reg.Accounts[reg.DefaultAlias]; !ok {
+			return nil, fmt.Errorf("default account '%s' not found in accounts config", reg.DefaultAlias)
 		}
 	}
 
@@ -79,11 +125,10 @@ func LoadRegistry(path string) (*Registry, error) {
 
 // Resolve returns the account for the given alias, or the default if alias is empty
 func (r *Registry) Resolve(alias string) (*Account, error) {
+	r.mu.RLock()
 	if alias == "" {
 		alias = r.DefaultAlias
 	}
-
-	r.mu.RLock()
 	acct, ok := r.Accounts[alias]
 	r.mu.RUnlock()
 	if !ok {
@@ -110,10 +155,18 @@ func (r *Registry) ListAccounts() []string {
 	return aliases
 }
 
-// AddAccount adds a new account to the registry and persists the config
+// AddAccount adds a new account to the registry and persists the config.
+// Returns an error if the alias is invalid or already exists.
 func (r *Registry) AddAccount(alias, tokenPath string) error {
+	if err := ValidateAlias(alias); err != nil {
+		return err
+	}
+
 	r.mu.Lock()
 	defer r.mu.Unlock()
+	if _, exists := r.Accounts[alias]; exists {
+		return fmt.Errorf("account '%s' already exists", alias)
+	}
 	r.Accounts[alias] = &Account{
 		Alias:     alias,
 		TokenPath: tokenPath,

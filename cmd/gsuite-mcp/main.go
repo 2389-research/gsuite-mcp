@@ -70,6 +70,12 @@ func resolveTokenPath(alias string, autoCreate bool) string {
 		return auth.GetTokenPath()
 	}
 
+	// Validate alias before using it in file paths
+	if err := accounts.ValidateAlias(alias); err != nil {
+		fmt.Fprintf(os.Stderr, "Error: %v\n", err)
+		os.Exit(1)
+	}
+
 	configPath := auth.GetAccountsConfigPath()
 	registry, err := accounts.LoadRegistry(configPath)
 	if err != nil {

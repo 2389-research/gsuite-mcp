@@ -86,9 +86,13 @@ func GetAccountsConfigPath() string {
 	return filepath.Clean(filepath.Join(configHome, appName, defaultAccounts))
 }
 
-// GenerateAccountTokenPath generates a token file path for a named account
+// GenerateAccountTokenPath generates a token file path for a named account.
+// The alias must already be validated before calling this function.
 func GenerateAccountTokenPath(alias string) string {
-	return filepath.Join(filepath.Dir(GetTokenPath()), "tokens", alias+".json")
+	// Use filepath.Base as a defense-in-depth measure against path traversal,
+	// even though callers should validate aliases before reaching here.
+	safe := filepath.Base(alias)
+	return filepath.Join(filepath.Dir(GetTokenPath()), "tokens", safe+".json")
 }
 
 // EnsureDir creates the parent directory for a file path if it doesn't exist.
