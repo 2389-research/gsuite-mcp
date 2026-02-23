@@ -59,3 +59,42 @@ func (s *Service) ListTaskLists(ctx context.Context) ([]*tasks.TaskList, error) 
 	}
 	return result.Items, nil
 }
+
+// CreateTaskList creates a new task list
+func (s *Service) CreateTaskList(ctx context.Context, title string) (*tasks.TaskList, error) {
+	var result *tasks.TaskList
+	err := retry.WithRetry(func() error {
+		var err error
+		result, err = s.svc.Tasklists.Insert(&tasks.TaskList{
+			Title: title,
+		}).Context(ctx).Do()
+		return err
+	}, 3, time.Second)
+	if err != nil {
+		return nil, fmt.Errorf("failed to create task list: %w", err)
+	}
+	return result, nil
+}
+
+// UpdateTaskList updates a task list's title
+func (s *Service) UpdateTaskList(ctx context.Context, tasklistID, title string) (*tasks.TaskList, error) {
+	var result *tasks.TaskList
+	err := retry.WithRetry(func() error {
+		var err error
+		result, err = s.svc.Tasklists.Patch(tasklistID, &tasks.TaskList{
+			Title: title,
+		}).Context(ctx).Do()
+		return err
+	}, 3, time.Second)
+	if err != nil {
+		return nil, fmt.Errorf("failed to update task list: %w", err)
+	}
+	return result, nil
+}
+
+// DeleteTaskList deletes a task list
+func (s *Service) DeleteTaskList(ctx context.Context, tasklistID string) error {
+	return retry.WithRetry(func() error {
+		return s.svc.Tasklists.Delete(tasklistID).Context(ctx).Do()
+	}, 3, time.Second)
+}
