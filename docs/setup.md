@@ -45,6 +45,10 @@ Enable the following APIs for your project:
    - Search for "People API"
    - Click "Enable"
 
+4. **Tasks API**
+   - Search for "Tasks API"
+   - Click "Enable"
+
 ### Step 3: Configure OAuth Consent Screen
 
 1. Go to "APIs & Services" > "OAuth consent screen"
@@ -59,6 +63,7 @@ Enable the following APIs for your project:
    - `.../auth/gmail.labels`
    - `.../auth/calendar`
    - `.../auth/contacts`
+   - `.../auth/tasks`
 6. Click "Save and Continue"
 7. Add test users if using external mode
 
@@ -74,10 +79,10 @@ Enable the following APIs for your project:
 
 ### Step 5: First Run and Authorization
 
-On first run, the server will prompt for authorization:
+On first run, use the `setup` subcommand to perform interactive authorization:
 
 ```bash
-./gsuite-mcp
+./gsuite-mcp setup
 ```
 
 You'll see:
@@ -97,6 +102,12 @@ Enter authorization code:
 The server will save the token to `token.json` for future use. You won't need to authorize again unless you revoke the token.
 
 ### Step 6: Verify Setup
+
+Start the MCP server:
+
+```bash
+./gsuite-mcp mcp
+```
 
 The server is now running and ready to accept MCP requests via stdio.
 
@@ -140,7 +151,7 @@ ish server start --port 9000
 ### Step 3: Run the Server
 
 ```bash
-./gsuite-mcp
+./gsuite-mcp mcp
 ```
 
 The server will use fake authentication and connect to your mock server instead of real Google APIs.
@@ -173,7 +184,7 @@ Add the server:
   "mcpServers": {
     "gsuite": {
       "command": "/path/to/gsuite-mcp",
-      "args": [],
+      "args": ["mcp"],
       "env": {}
     }
   }
@@ -186,7 +197,7 @@ For ish mode testing:
   "mcpServers": {
     "gsuite-test": {
       "command": "/path/to/gsuite-mcp",
-      "args": [],
+      "args": ["mcp"],
       "env": {
         "ISH_MODE": "true",
         "ISH_BASE_URL": "http://localhost:9000",
@@ -204,7 +215,7 @@ For ish mode testing:
 Make sure `credentials.json` is in the same directory as the binary, or set the path:
 
 ```bash
-export GOOGLE_CREDENTIALS_PATH=/path/to/credentials.json
+export GSUITE_MCP_CREDENTIALS_PATH=/path/to/credentials.json
 ```
 
 ### "Failed to create Gmail service"
@@ -213,6 +224,7 @@ Check that all required APIs are enabled in Google Cloud Console:
 - Gmail API
 - Google Calendar API
 - People API
+- Tasks API
 
 ### OAuth Token Expired
 
@@ -220,7 +232,7 @@ Delete `token.json` and re-run the server. You'll be prompted to re-authorize.
 
 ```bash
 rm token.json
-./gsuite-mcp
+./gsuite-mcp setup
 ```
 
 ### Ish Mode Not Working
@@ -247,15 +259,15 @@ Make sure your mock server is running and accessible at `ISH_BASE_URL`.
 ### Custom Token Path
 
 ```bash
-export GOOGLE_TOKEN_PATH=/custom/path/token.json
-./gsuite-mcp
+export GSUITE_MCP_TOKEN_PATH=/custom/path/token.json
+./gsuite-mcp mcp
 ```
 
 ### Custom Credentials Path
 
 ```bash
-export GOOGLE_CREDENTIALS_PATH=/custom/path/credentials.json
-./gsuite-mcp
+export GSUITE_MCP_CREDENTIALS_PATH=/custom/path/credentials.json
+./gsuite-mcp mcp
 ```
 
 ### Multiple Accounts
