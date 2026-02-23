@@ -5,6 +5,7 @@ package server
 
 import (
 	"context"
+	"strings"
 	"testing"
 
 	"github.com/mark3labs/mcp-go/mcp"
@@ -256,5 +257,23 @@ func TestExtractAuthCode(t *testing.T) {
 			result := extractAuthCode(tt.input)
 			assert.Equal(t, tt.expected, result)
 		})
+	}
+}
+
+func TestServer_ToolsAcceptAccountParam(t *testing.T) {
+	t.Setenv("ISH_MODE", "true")
+
+	srv, err := NewServer(context.Background())
+	require.NoError(t, err)
+
+	tools := srv.ListTools()
+	for _, tool := range tools {
+		// Auth tools don't need account param (they handle it differently)
+		if strings.HasPrefix(tool.Name, "auth_") || tool.Name == "accounts_list" {
+			continue
+		}
+		props := tool.InputSchema.Properties
+		_, hasAccount := props["account"]
+		assert.True(t, hasAccount, "tool %s should have 'account' property", tool.Name)
 	}
 }

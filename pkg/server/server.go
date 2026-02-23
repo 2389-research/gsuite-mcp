@@ -191,6 +191,7 @@ func (s *Server) registerTools() {
 					"type":        "boolean",
 					"description": "When true, fetches full message details (from, subject, snippet, date). When false/omitted, returns only message IDs.",
 				},
+				"account": map[string]string{"type": "string", "description": "Account alias (e.g., 'work', 'personal'). Uses default if not specified."},
 			},
 		},
 	}, s.handleGmailListMessages)
@@ -202,6 +203,7 @@ func (s *Server) registerTools() {
 			Type: "object",
 			Properties: map[string]interface{}{
 				"message_id": map[string]string{"type": "string", "description": "The message ID to retrieve"},
+				"account":    map[string]string{"type": "string", "description": "Account alias (e.g., 'work', 'personal'). Uses default if not specified."},
 			},
 			Required: []string{"message_id"},
 		},
@@ -219,6 +221,7 @@ func (s *Server) registerTools() {
 				"subject":     map[string]string{"type": "string", "description": "Email subject (auto-prefixed with Re: for replies)"},
 				"body":        map[string]string{"type": "string", "description": "Email body content"},
 				"in_reply_to": map[string]string{"type": "string", "description": "Message ID to reply to (auto-fetches threading headers)"},
+				"account":     map[string]string{"type": "string", "description": "Account alias (e.g., 'work', 'personal'). Uses default if not specified."},
 			},
 			Required: []string{"to", "subject", "body"},
 		},
@@ -236,6 +239,7 @@ func (s *Server) registerTools() {
 				"subject":     map[string]string{"type": "string", "description": "Email subject (auto-prefixed with Re: for replies)"},
 				"body":        map[string]string{"type": "string", "description": "Email body content"},
 				"in_reply_to": map[string]string{"type": "string", "description": "Message ID to reply to (auto-fetches threading headers)"},
+				"account":     map[string]string{"type": "string", "description": "Account alias (e.g., 'work', 'personal'). Uses default if not specified."},
 			},
 			Required: []string{"to", "subject", "body"},
 		},
@@ -248,6 +252,7 @@ func (s *Server) registerTools() {
 			Type: "object",
 			Properties: map[string]interface{}{
 				"draft_id": map[string]string{"type": "string", "description": "The draft ID to send"},
+				"account":  map[string]string{"type": "string", "description": "Account alias (e.g., 'work', 'personal'). Uses default if not specified."},
 			},
 			Required: []string{"draft_id"},
 		},
@@ -270,6 +275,7 @@ func (s *Server) registerTools() {
 					"items":       map[string]string{"type": "string"},
 					"description": "Label IDs to remove (e.g., UNREAD, INBOX)",
 				},
+				"account": map[string]string{"type": "string", "description": "Account alias (e.g., 'work', 'personal'). Uses default if not specified."},
 			},
 			Required: []string{"message_id"},
 		},
@@ -282,6 +288,7 @@ func (s *Server) registerTools() {
 			Type: "object",
 			Properties: map[string]interface{}{
 				"message_id": map[string]string{"type": "string", "description": "The message ID to trash"},
+				"account":    map[string]string{"type": "string", "description": "Account alias (e.g., 'work', 'personal'). Uses default if not specified."},
 			},
 			Required: []string{"message_id"},
 		},
@@ -294,6 +301,7 @@ func (s *Server) registerTools() {
 			Type: "object",
 			Properties: map[string]interface{}{
 				"message_id": map[string]string{"type": "string", "description": "The message ID to delete permanently"},
+				"account":    map[string]string{"type": "string", "description": "Account alias (e.g., 'work', 'personal'). Uses default if not specified."},
 			},
 			Required: []string{"message_id"},
 		},
@@ -341,6 +349,7 @@ func (s *Server) registerTools() {
 				"max_results": map[string]string{"type": "integer"},
 				"time_min":    map[string]string{"type": "string", "description": "RFC3339 timestamp for earliest event"},
 				"time_max":    map[string]string{"type": "string", "description": "RFC3339 timestamp for latest event"},
+				"account":     map[string]string{"type": "string", "description": "Account alias (e.g., 'work', 'personal'). Uses default if not specified."},
 			},
 		},
 	}, s.handleCalendarListEvents)
@@ -352,6 +361,7 @@ func (s *Server) registerTools() {
 			Type: "object",
 			Properties: map[string]interface{}{
 				"event_id": map[string]string{"type": "string", "description": "The event ID to retrieve"},
+				"account":  map[string]string{"type": "string", "description": "Account alias (e.g., 'work', 'personal'). Uses default if not specified."},
 			},
 			Required: []string{"event_id"},
 		},
@@ -381,6 +391,7 @@ func (s *Server) registerTools() {
 					"type":        "boolean",
 					"description": "Send invite emails to attendees (default: true)",
 				},
+				"account": map[string]string{"type": "string", "description": "Account alias (e.g., 'work', 'personal'). Uses default if not specified."},
 			},
 			Required: []string{"summary", "start_time", "end_time"},
 		},
@@ -426,6 +437,7 @@ func (s *Server) registerTools() {
 					"type":        "boolean",
 					"description": "Send update emails (default: true)",
 				},
+				"account": map[string]string{"type": "string", "description": "Account alias (e.g., 'work', 'personal'). Uses default if not specified."},
 			},
 			Required: []string{"event_id"},
 		},
@@ -438,6 +450,7 @@ func (s *Server) registerTools() {
 			Type: "object",
 			Properties: map[string]interface{}{
 				"event_id": map[string]string{"type": "string", "description": "The event ID to delete"},
+				"account":  map[string]string{"type": "string", "description": "Account alias (e.g., 'work', 'personal'). Uses default if not specified."},
 			},
 			Required: []string{"event_id"},
 		},
@@ -451,6 +464,7 @@ func (s *Server) registerTools() {
 			Type: "object",
 			Properties: map[string]interface{}{
 				"page_size": map[string]string{"type": "integer"},
+				"account":   map[string]string{"type": "string", "description": "Account alias (e.g., 'work', 'personal'). Uses default if not specified."},
 			},
 		},
 	}, s.handlePeopleListContacts)
@@ -463,6 +477,7 @@ func (s *Server) registerTools() {
 			Properties: map[string]interface{}{
 				"query":     map[string]string{"type": "string", "description": "Search query (name, email, phone, etc)"},
 				"page_size": map[string]string{"type": "integer"},
+				"account":   map[string]string{"type": "string", "description": "Account alias (e.g., 'work', 'personal'). Uses default if not specified."},
 			},
 			Required: []string{"query"},
 		},
@@ -475,6 +490,7 @@ func (s *Server) registerTools() {
 			Type: "object",
 			Properties: map[string]interface{}{
 				"resource_name": map[string]string{"type": "string", "description": "Resource name of the person (e.g., people/12345)"},
+				"account":       map[string]string{"type": "string", "description": "Account alias (e.g., 'work', 'personal'). Uses default if not specified."},
 			},
 			Required: []string{"resource_name"},
 		},
@@ -490,6 +506,7 @@ func (s *Server) registerTools() {
 				"family_name": map[string]string{"type": "string", "description": "Last name"},
 				"email":       map[string]string{"type": "string", "description": "Email address"},
 				"phone":       map[string]string{"type": "string", "description": "Phone number"},
+				"account":     map[string]string{"type": "string", "description": "Account alias (e.g., 'work', 'personal'). Uses default if not specified."},
 			},
 			Required: []string{"given_name"},
 		},
@@ -506,6 +523,7 @@ func (s *Server) registerTools() {
 				"family_name":   map[string]string{"type": "string", "description": "Last name"},
 				"email":         map[string]string{"type": "string", "description": "Email address"},
 				"phone":         map[string]string{"type": "string", "description": "Phone number"},
+				"account":       map[string]string{"type": "string", "description": "Account alias (e.g., 'work', 'personal'). Uses default if not specified."},
 			},
 			Required: []string{"resource_name"},
 		},
@@ -518,6 +536,7 @@ func (s *Server) registerTools() {
 			Type: "object",
 			Properties: map[string]interface{}{
 				"resource_name": map[string]string{"type": "string", "description": "Resource name of the person (e.g., people/12345)"},
+				"account":       map[string]string{"type": "string", "description": "Account alias (e.g., 'work', 'personal'). Uses default if not specified."},
 			},
 			Required: []string{"resource_name"},
 		},
@@ -528,8 +547,10 @@ func (s *Server) registerTools() {
 		Name:        "tasks_list_tasklists",
 		Description: "List all task lists",
 		InputSchema: mcp.ToolInputSchema{
-			Type:       "object",
-			Properties: map[string]interface{}{},
+			Type: "object",
+			Properties: map[string]interface{}{
+				"account": map[string]string{"type": "string", "description": "Account alias (e.g., 'work', 'personal'). Uses default if not specified."},
+			},
 		},
 	}, s.handleTasksListTaskLists)
 
@@ -539,7 +560,8 @@ func (s *Server) registerTools() {
 		InputSchema: mcp.ToolInputSchema{
 			Type: "object",
 			Properties: map[string]interface{}{
-				"title": map[string]string{"type": "string", "description": "Title of the task list"},
+				"title":   map[string]string{"type": "string", "description": "Title of the task list"},
+				"account": map[string]string{"type": "string", "description": "Account alias (e.g., 'work', 'personal'). Uses default if not specified."},
 			},
 			Required: []string{"title"},
 		},
@@ -553,6 +575,7 @@ func (s *Server) registerTools() {
 			Properties: map[string]interface{}{
 				"tasklist_id": map[string]string{"type": "string", "description": "ID of the task list"},
 				"title":       map[string]string{"type": "string", "description": "New title for the task list"},
+				"account":     map[string]string{"type": "string", "description": "Account alias (e.g., 'work', 'personal'). Uses default if not specified."},
 			},
 			Required: []string{"tasklist_id", "title"},
 		},
@@ -565,6 +588,7 @@ func (s *Server) registerTools() {
 			Type: "object",
 			Properties: map[string]interface{}{
 				"tasklist_id": map[string]string{"type": "string", "description": "ID of the task list to delete"},
+				"account":     map[string]string{"type": "string", "description": "Account alias (e.g., 'work', 'personal'). Uses default if not specified."},
 			},
 			Required: []string{"tasklist_id"},
 		},
@@ -581,6 +605,7 @@ func (s *Server) registerTools() {
 				"show_hidden":    map[string]interface{}{"type": "boolean", "description": "Include hidden tasks (default: false)"},
 				"due_min":        map[string]string{"type": "string", "description": "Minimum due date (RFC 3339, e.g., 2026-01-01T00:00:00Z)"},
 				"due_max":        map[string]string{"type": "string", "description": "Maximum due date (RFC 3339, e.g., 2026-12-31T23:59:59Z)"},
+				"account":        map[string]string{"type": "string", "description": "Account alias (e.g., 'work', 'personal'). Uses default if not specified."},
 			},
 		},
 	}, s.handleTasksListTasks)
@@ -596,6 +621,7 @@ func (s *Server) registerTools() {
 				"notes":       map[string]string{"type": "string", "description": "Additional notes for the task"},
 				"due":         map[string]string{"type": "string", "description": "Due date (RFC 3339, e.g., 2026-03-01T00:00:00Z)"},
 				"parent":      map[string]string{"type": "string", "description": "Parent task ID for creating a subtask"},
+				"account":     map[string]string{"type": "string", "description": "Account alias (e.g., 'work', 'personal'). Uses default if not specified."},
 			},
 			Required: []string{"title"},
 		},
@@ -613,6 +639,7 @@ func (s *Server) registerTools() {
 				"notes":       map[string]string{"type": "string", "description": "New notes"},
 				"due":         map[string]string{"type": "string", "description": "New due date (RFC 3339)"},
 				"status":      map[string]string{"type": "string", "description": "Task status: 'needsAction' or 'completed'"},
+				"account":     map[string]string{"type": "string", "description": "Account alias (e.g., 'work', 'personal'). Uses default if not specified."},
 			},
 			Required: []string{"task_id"},
 		},
@@ -626,6 +653,7 @@ func (s *Server) registerTools() {
 			Properties: map[string]interface{}{
 				"tasklist_id": map[string]string{"type": "string", "description": "ID of the task list (default: @default)"},
 				"task_id":     map[string]string{"type": "string", "description": "ID of the task to delete"},
+				"account":     map[string]string{"type": "string", "description": "Account alias (e.g., 'work', 'personal'). Uses default if not specified."},
 			},
 			Required: []string{"task_id"},
 		},
@@ -745,7 +773,8 @@ type ListTasksResponse struct {
 
 // Tool handlers
 func (s *Server) handleGmailListMessages(ctx context.Context, request mcp.CallToolRequest) (*mcp.CallToolResult, error) {
-	svc, err := s.resolveServices(ctx, "")
+	account := request.GetString("account", "")
+	svc, err := s.resolveServices(ctx, account)
 	if err != nil {
 		return mcp.NewToolResultError(err.Error()), nil
 	}
@@ -820,7 +849,8 @@ func (s *Server) handleGmailListMessages(ctx context.Context, request mcp.CallTo
 }
 
 func (s *Server) handleGmailGetMessage(ctx context.Context, request mcp.CallToolRequest) (*mcp.CallToolResult, error) {
-	svc, err := s.resolveServices(ctx, "")
+	account := request.GetString("account", "")
+	svc, err := s.resolveServices(ctx, account)
 	if err != nil {
 		return mcp.NewToolResultError(err.Error()), nil
 	}
@@ -839,7 +869,8 @@ func (s *Server) handleGmailGetMessage(ctx context.Context, request mcp.CallTool
 }
 
 func (s *Server) handleGmailSendMessage(ctx context.Context, request mcp.CallToolRequest) (*mcp.CallToolResult, error) {
-	svc, err := s.resolveServices(ctx, "")
+	account := request.GetString("account", "")
+	svc, err := s.resolveServices(ctx, account)
 	if err != nil {
 		return mcp.NewToolResultError(err.Error()), nil
 	}
@@ -872,7 +903,8 @@ func (s *Server) handleGmailSendMessage(ctx context.Context, request mcp.CallToo
 }
 
 func (s *Server) handleGmailCreateDraft(ctx context.Context, request mcp.CallToolRequest) (*mcp.CallToolResult, error) {
-	svc, err := s.resolveServices(ctx, "")
+	account := request.GetString("account", "")
+	svc, err := s.resolveServices(ctx, account)
 	if err != nil {
 		return mcp.NewToolResultError(err.Error()), nil
 	}
@@ -905,7 +937,8 @@ func (s *Server) handleGmailCreateDraft(ctx context.Context, request mcp.CallToo
 }
 
 func (s *Server) handleGmailSendDraft(ctx context.Context, request mcp.CallToolRequest) (*mcp.CallToolResult, error) {
-	svc, err := s.resolveServices(ctx, "")
+	account := request.GetString("account", "")
+	svc, err := s.resolveServices(ctx, account)
 	if err != nil {
 		return mcp.NewToolResultError(err.Error()), nil
 	}
@@ -924,7 +957,8 @@ func (s *Server) handleGmailSendDraft(ctx context.Context, request mcp.CallToolR
 }
 
 func (s *Server) handleGmailModifyLabels(ctx context.Context, request mcp.CallToolRequest) (*mcp.CallToolResult, error) {
-	svc, err := s.resolveServices(ctx, "")
+	account := request.GetString("account", "")
+	svc, err := s.resolveServices(ctx, account)
 	if err != nil {
 		return mcp.NewToolResultError(err.Error()), nil
 	}
@@ -975,7 +1009,8 @@ func (s *Server) handleGmailModifyLabels(ctx context.Context, request mcp.CallTo
 }
 
 func (s *Server) handleGmailTrashMessage(ctx context.Context, request mcp.CallToolRequest) (*mcp.CallToolResult, error) {
-	svc, err := s.resolveServices(ctx, "")
+	account := request.GetString("account", "")
+	svc, err := s.resolveServices(ctx, account)
 	if err != nil {
 		return mcp.NewToolResultError(err.Error()), nil
 	}
@@ -994,7 +1029,8 @@ func (s *Server) handleGmailTrashMessage(ctx context.Context, request mcp.CallTo
 }
 
 func (s *Server) handleGmailDeleteMessage(ctx context.Context, request mcp.CallToolRequest) (*mcp.CallToolResult, error) {
-	svc, err := s.resolveServices(ctx, "")
+	account := request.GetString("account", "")
+	svc, err := s.resolveServices(ctx, account)
 	if err != nil {
 		return mcp.NewToolResultError(err.Error()), nil
 	}
@@ -1155,7 +1191,8 @@ func (s *Server) handleGmailManageLabels(ctx context.Context, request mcp.CallTo
 }
 
 func (s *Server) handleCalendarListEvents(ctx context.Context, request mcp.CallToolRequest) (*mcp.CallToolResult, error) {
-	svc, err := s.resolveServices(ctx, "")
+	account := request.GetString("account", "")
+	svc, err := s.resolveServices(ctx, account)
 	if err != nil {
 		return mcp.NewToolResultError(err.Error()), nil
 	}
@@ -1191,7 +1228,8 @@ func (s *Server) handleCalendarListEvents(ctx context.Context, request mcp.CallT
 }
 
 func (s *Server) handleCalendarGetEvent(ctx context.Context, request mcp.CallToolRequest) (*mcp.CallToolResult, error) {
-	svc, err := s.resolveServices(ctx, "")
+	account := request.GetString("account", "")
+	svc, err := s.resolveServices(ctx, account)
 	if err != nil {
 		return mcp.NewToolResultError(err.Error()), nil
 	}
@@ -1210,7 +1248,8 @@ func (s *Server) handleCalendarGetEvent(ctx context.Context, request mcp.CallToo
 }
 
 func (s *Server) handleCalendarCreateEvent(ctx context.Context, request mcp.CallToolRequest) (*mcp.CallToolResult, error) {
-	svc, err := s.resolveServices(ctx, "")
+	account := request.GetString("account", "")
+	svc, err := s.resolveServices(ctx, account)
 	if err != nil {
 		return mcp.NewToolResultError(err.Error()), nil
 	}
@@ -1256,7 +1295,8 @@ func (s *Server) handleCalendarCreateEvent(ctx context.Context, request mcp.Call
 }
 
 func (s *Server) handleCalendarUpdateEvent(ctx context.Context, request mcp.CallToolRequest) (*mcp.CallToolResult, error) {
-	svc, err := s.resolveServices(ctx, "")
+	account := request.GetString("account", "")
+	svc, err := s.resolveServices(ctx, account)
 	if err != nil {
 		return mcp.NewToolResultError(err.Error()), nil
 	}
@@ -1427,7 +1467,8 @@ func (s *Server) handleCalendarUpdateEvent(ctx context.Context, request mcp.Call
 }
 
 func (s *Server) handleCalendarDeleteEvent(ctx context.Context, request mcp.CallToolRequest) (*mcp.CallToolResult, error) {
-	svc, err := s.resolveServices(ctx, "")
+	account := request.GetString("account", "")
+	svc, err := s.resolveServices(ctx, account)
 	if err != nil {
 		return mcp.NewToolResultError(err.Error()), nil
 	}
@@ -1446,7 +1487,8 @@ func (s *Server) handleCalendarDeleteEvent(ctx context.Context, request mcp.Call
 }
 
 func (s *Server) handlePeopleListContacts(ctx context.Context, request mcp.CallToolRequest) (*mcp.CallToolResult, error) {
-	svc, err := s.resolveServices(ctx, "")
+	account := request.GetString("account", "")
+	svc, err := s.resolveServices(ctx, account)
 	if err != nil {
 		return mcp.NewToolResultError(err.Error()), nil
 	}
@@ -1465,7 +1507,8 @@ func (s *Server) handlePeopleListContacts(ctx context.Context, request mcp.CallT
 }
 
 func (s *Server) handlePeopleSearchContacts(ctx context.Context, request mcp.CallToolRequest) (*mcp.CallToolResult, error) {
-	svc, err := s.resolveServices(ctx, "")
+	account := request.GetString("account", "")
+	svc, err := s.resolveServices(ctx, account)
 	if err != nil {
 		return mcp.NewToolResultError(err.Error()), nil
 	}
@@ -1489,7 +1532,8 @@ func (s *Server) handlePeopleSearchContacts(ctx context.Context, request mcp.Cal
 }
 
 func (s *Server) handlePeopleGetContact(ctx context.Context, request mcp.CallToolRequest) (*mcp.CallToolResult, error) {
-	svc, err := s.resolveServices(ctx, "")
+	account := request.GetString("account", "")
+	svc, err := s.resolveServices(ctx, account)
 	if err != nil {
 		return mcp.NewToolResultError(err.Error()), nil
 	}
@@ -1508,7 +1552,8 @@ func (s *Server) handlePeopleGetContact(ctx context.Context, request mcp.CallToo
 }
 
 func (s *Server) handlePeopleCreateContact(ctx context.Context, request mcp.CallToolRequest) (*mcp.CallToolResult, error) {
-	svc, err := s.resolveServices(ctx, "")
+	account := request.GetString("account", "")
+	svc, err := s.resolveServices(ctx, account)
 	if err != nil {
 		return mcp.NewToolResultError(err.Error()), nil
 	}
@@ -1553,7 +1598,8 @@ func (s *Server) handlePeopleCreateContact(ctx context.Context, request mcp.Call
 }
 
 func (s *Server) handlePeopleUpdateContact(ctx context.Context, request mcp.CallToolRequest) (*mcp.CallToolResult, error) {
-	svc, err := s.resolveServices(ctx, "")
+	account := request.GetString("account", "")
+	svc, err := s.resolveServices(ctx, account)
 	if err != nil {
 		return mcp.NewToolResultError(err.Error()), nil
 	}
@@ -1625,7 +1671,8 @@ func (s *Server) handlePeopleUpdateContact(ctx context.Context, request mcp.Call
 }
 
 func (s *Server) handlePeopleDeleteContact(ctx context.Context, request mcp.CallToolRequest) (*mcp.CallToolResult, error) {
-	svc, err := s.resolveServices(ctx, "")
+	account := request.GetString("account", "")
+	svc, err := s.resolveServices(ctx, account)
 	if err != nil {
 		return mcp.NewToolResultError(err.Error()), nil
 	}
@@ -1646,7 +1693,8 @@ func (s *Server) handlePeopleDeleteContact(ctx context.Context, request mcp.Call
 // Tasks tool handlers
 
 func (s *Server) handleTasksListTaskLists(ctx context.Context, request mcp.CallToolRequest) (*mcp.CallToolResult, error) {
-	svc, err := s.resolveServices(ctx, "")
+	account := request.GetString("account", "")
+	svc, err := s.resolveServices(ctx, account)
 	if err != nil {
 		return mcp.NewToolResultError(err.Error()), nil
 	}
@@ -1663,7 +1711,8 @@ func (s *Server) handleTasksListTaskLists(ctx context.Context, request mcp.CallT
 }
 
 func (s *Server) handleTasksCreateTaskList(ctx context.Context, request mcp.CallToolRequest) (*mcp.CallToolResult, error) {
-	svc, err := s.resolveServices(ctx, "")
+	account := request.GetString("account", "")
+	svc, err := s.resolveServices(ctx, account)
 	if err != nil {
 		return mcp.NewToolResultError(err.Error()), nil
 	}
@@ -1682,7 +1731,8 @@ func (s *Server) handleTasksCreateTaskList(ctx context.Context, request mcp.Call
 }
 
 func (s *Server) handleTasksUpdateTaskList(ctx context.Context, request mcp.CallToolRequest) (*mcp.CallToolResult, error) {
-	svc, err := s.resolveServices(ctx, "")
+	account := request.GetString("account", "")
+	svc, err := s.resolveServices(ctx, account)
 	if err != nil {
 		return mcp.NewToolResultError(err.Error()), nil
 	}
@@ -1706,7 +1756,8 @@ func (s *Server) handleTasksUpdateTaskList(ctx context.Context, request mcp.Call
 }
 
 func (s *Server) handleTasksDeleteTaskList(ctx context.Context, request mcp.CallToolRequest) (*mcp.CallToolResult, error) {
-	svc, err := s.resolveServices(ctx, "")
+	account := request.GetString("account", "")
+	svc, err := s.resolveServices(ctx, account)
 	if err != nil {
 		return mcp.NewToolResultError(err.Error()), nil
 	}
@@ -1728,7 +1779,8 @@ func (s *Server) handleTasksDeleteTaskList(ctx context.Context, request mcp.Call
 }
 
 func (s *Server) handleTasksListTasks(ctx context.Context, request mcp.CallToolRequest) (*mcp.CallToolResult, error) {
-	svc, err := s.resolveServices(ctx, "")
+	account := request.GetString("account", "")
+	svc, err := s.resolveServices(ctx, account)
 	if err != nil {
 		return mcp.NewToolResultError(err.Error()), nil
 	}
@@ -1751,7 +1803,8 @@ func (s *Server) handleTasksListTasks(ctx context.Context, request mcp.CallToolR
 }
 
 func (s *Server) handleTasksCreateTask(ctx context.Context, request mcp.CallToolRequest) (*mcp.CallToolResult, error) {
-	svc, err := s.resolveServices(ctx, "")
+	account := request.GetString("account", "")
+	svc, err := s.resolveServices(ctx, account)
 	if err != nil {
 		return mcp.NewToolResultError(err.Error()), nil
 	}
@@ -1785,7 +1838,8 @@ func (s *Server) handleTasksCreateTask(ctx context.Context, request mcp.CallTool
 }
 
 func (s *Server) handleTasksUpdateTask(ctx context.Context, request mcp.CallToolRequest) (*mcp.CallToolResult, error) {
-	svc, err := s.resolveServices(ctx, "")
+	account := request.GetString("account", "")
+	svc, err := s.resolveServices(ctx, account)
 	if err != nil {
 		return mcp.NewToolResultError(err.Error()), nil
 	}
@@ -1824,7 +1878,8 @@ func (s *Server) handleTasksUpdateTask(ctx context.Context, request mcp.CallTool
 }
 
 func (s *Server) handleTasksDeleteTask(ctx context.Context, request mcp.CallToolRequest) (*mcp.CallToolResult, error) {
-	svc, err := s.resolveServices(ctx, "")
+	account := request.GetString("account", "")
+	svc, err := s.resolveServices(ctx, account)
 	if err != nil {
 		return mcp.NewToolResultError(err.Error()), nil
 	}
