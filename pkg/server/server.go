@@ -156,7 +156,17 @@ func (s *Server) resolveServices(ctx context.Context, alias string) (*AccountSer
 
 	client := acct.GetClient()
 	if client == nil {
-		client = &http.Client{}
+		// Lazy-load: create an authenticated client from the account's stored token
+		authenticator, authErr := s.authenticatorForAccount(acct.Alias)
+		if authErr != nil {
+			return nil, fmt.Errorf("account '%s' is not authenticated: %w (use auth_start tool to authenticate)", acct.Alias, authErr)
+		}
+		authedClient, clientErr := authenticator.GetClient(ctx)
+		if clientErr != nil {
+			return nil, fmt.Errorf("account '%s' authentication failed: %w (token may be expired, use auth_start to re-authenticate)", acct.Alias, clientErr)
+		}
+		acct.SetClient(authedClient)
+		client = authedClient
 	}
 
 	return s.createServicesForClient(ctx, acct.Alias, client)
