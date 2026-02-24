@@ -1,0 +1,84 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>404 - GSuite MCP Server</title>
+<meta name="robots" content="noindex">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Red+Hat+Display:wght@400;700;900&family=Source+Serif+4:wght@400&display=swap" rel="stylesheet">
+<style>
+  :root {
+    --ink: #1B1D23;
+    --cream: #F4F0E8;
+    --red: #C23B22;
+    --blue: #2B5C8A;
+    --manila: #D4C5A9;
+    --counter: #6B6256;
+  }
+  * { margin: 0; padding: 0; box-sizing: border-box; }
+  body {
+    font-family: 'Source Serif 4', Georgia, serif;
+    background: var(--ink);
+    color: var(--cream);
+    min-height: 100vh;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    text-align: center;
+    padding: 2rem;
+  }
+  h1 {
+    font-family: 'Red Hat Display', sans-serif;
+    font-size: clamp(4rem, 12vw, 8rem);
+    font-weight: 900;
+    color: var(--red);
+    line-height: 1;
+    margin-bottom: 0.5rem;
+  }
+  p {
+    font-size: 1.1rem;
+    color: var(--manila);
+    margin-bottom: 1.5rem;
+    max-width: 400px;
+  }
+  a {
+    font-family: 'Red Hat Display', sans-serif;
+    font-size: 0.9rem;
+    font-weight: 700;
+    color: var(--cream);
+    background: var(--red);
+    padding: 0.85em 1.8em;
+    text-decoration: none;
+    text-transform: uppercase;
+    letter-spacing: 0.04em;
+    display: inline-block;
+  }
+  a:hover { background: #A83020; }
+  .stamp {
+    font-family: 'Red Hat Display', sans-serif;
+    font-weight: 900;
+    font-size: 0.7rem;
+    letter-spacing: 0.15em;
+    text-transform: uppercase;
+    color: var(--red);
+    border: 2px solid var(--red);
+    padding: 0.4em 0.8em;
+    transform: rotate(-3deg);
+    display: inline-block;
+    opacity: 0.6;
+    margin-top: 2rem;
+  }
+</style>
+</head>
+<body>
+<div>
+  <h1>404</h1>
+  <p>This page got lost in the mail. Try the front desk.</p>
+  <a href="/">Back to home</a>
+  <br>
+  <span class="stamp">Return to sender</span>
+</div>
+</body>
+</html>

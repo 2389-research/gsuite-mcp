@@ -44,7 +44,14 @@ This opens a browser to sign in with Google. The token is saved locally so you o
 
 ### 4. Connect to your AI client
 
-Add this to your MCP client config (Claude Desktop, Claude Code, etc.):
+For Claude Code:
+
+```bash
+claude mcp add gsuite gsuite-mcp -- mcp    # project scope (default)
+claude mcp add gsuite gsuite-mcp --scope user -- mcp   # user scope (all projects)
+```
+
+For Claude Desktop or other MCP clients, add this to your config:
 
 ```json
 {
@@ -76,8 +83,11 @@ Then just tell your AI which one:
 Every tool accepts an optional `account` parameter. Without one, it uses the default.
 
 ```bash
-gsuite-mcp whoami --account work
-gsuite-mcp whoami --account personal
+$ gsuite-mcp whoami --account work
+Account:  work
+Email:    harper@2389.ai
+Messages: 4210 total
+Threads:  1847 total
 ```
 
 ## What it can do

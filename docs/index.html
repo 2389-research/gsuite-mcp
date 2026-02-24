@@ -1,0 +1,1015 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>GSuite MCP Server - Connect your AI to Google Workspace</title>
+<meta name="description" content="An MCP server that gives your AI assistant access to Gmail, Google Calendar, Contacts, and Tasks. 33 tools, one command to install.">
+<meta name="keywords" content="MCP server, Google Workspace, Gmail API, Google Calendar API, Claude, AI assistant, Model Context Protocol, Google Tasks, Google Contacts">
+<meta name="author" content="2389 Research Inc.">
+<link rel="canonical" href="https://2389-research.github.io/gsuite-mcp/">
+
+<!-- Open Graph -->
+<meta property="og:type" content="website">
+<meta property="og:title" content="GSuite MCP Server - Connect your AI to Google Workspace">
+<meta property="og:description" content="An MCP server that gives your AI assistant access to Gmail, Google Calendar, Contacts, and Tasks. 33 tools, one command to install.">
+<meta property="og:url" content="https://2389-research.github.io/gsuite-mcp/">
+<meta property="og:image" content="https://2389-research.github.io/gsuite-mcp/gsuite_mcp.png">
+<meta property="og:site_name" content="GSuite MCP Server">
+
+<!-- Twitter Card -->
+<meta name="twitter:card" content="summary_large_image">
+<meta name="twitter:title" content="GSuite MCP Server - Connect your AI to Google Workspace">
+<meta name="twitter:description" content="33 MCP tools for Gmail, Calendar, Contacts, and Tasks. Install with one command.">
+<meta name="twitter:image" content="https://2389-research.github.io/gsuite-mcp/gsuite_mcp.png">
+
+<!-- Structured Data -->
+<script type="application/ld+json">
+{
+  "@context": "https://schema.org",
+  "@type": "SoftwareApplication",
+  "name": "GSuite MCP Server",
+  "description": "An MCP server that connects your AI assistant to Gmail, Google Calendar, Contacts, and Tasks.",
+  "applicationCategory": "DeveloperApplication",
+  "operatingSystem": "macOS, Linux",
+  "url": "https://github.com/2389-research/gsuite-mcp",
+  "downloadUrl": "https://github.com/2389-research/gsuite-mcp/releases",
+  "softwareVersion": "1.4.1",
+  "license": "https://opensource.org/licenses/MIT",
+  "author": {
+    "@type": "Organization",
+    "name": "2389 Research Inc.",
+    "url": "https://2389.ai"
+  },
+  "offers": {
+    "@type": "Offer",
+    "price": "0",
+    "priceCurrency": "USD"
+  }
+}
+</script>
+
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Red+Hat+Display:wght@400;500;700;900&family=Source+Serif+4:ital,wght@0,400;0,600;1,400&display=swap" rel="stylesheet">
+<style>
+  :root {
+    --ink: #1B1D23;
+    --cream: #F4F0E8;
+    --red: #C23B22;
+    --blue: #2B5C8A;
+    --manila: #D4C5A9;
+    --counter: #6B6256;
+    --paper: #FAF8F4;
+  }
+
+  * { margin: 0; padding: 0; box-sizing: border-box; }
+
+  html { scroll-behavior: smooth; }
+
+  body {
+    font-family: 'Source Serif 4', Georgia, serif;
+    color: var(--ink);
+    background: var(--cream);
+    font-size: 18px;
+    line-height: 1.65;
+    -webkit-font-smoothing: antialiased;
+  }
+
+  /* ---- Typography ---- */
+
+  h1, h2, h3, h4 {
+    font-family: 'Red Hat Display', sans-serif;
+    line-height: 1.15;
+    font-weight: 700;
+  }
+
+  a {
+    color: var(--blue);
+    text-decoration-thickness: 1px;
+    text-underline-offset: 3px;
+  }
+
+  a:hover { color: var(--red); }
+
+  code, pre {
+    font-family: 'SF Mono', 'Cascadia Code', 'Fira Mono', monospace;
+    font-size: 0.88em;
+  }
+
+  /* ---- Layout ---- */
+
+  .container {
+    max-width: 820px;
+    margin: 0 auto;
+    padding: 0 2rem;
+  }
+
+  .container-wide {
+    max-width: 960px;
+    margin: 0 auto;
+    padding: 0 2rem;
+  }
+
+  section {
+    padding: 5rem 0;
+    border-bottom: 1px solid var(--manila);
+  }
+
+  section:last-of-type { border-bottom: none; }
+
+  /* ---- Hero ---- */
+
+  .hero {
+    padding: 7rem 0 5rem;
+    background: var(--ink);
+    color: var(--cream);
+    border-bottom: 4px solid var(--red);
+    position: relative;
+    overflow: hidden;
+  }
+
+  .hero::before {
+    content: '';
+    position: absolute;
+    top: 0; left: 0; right: 0; bottom: 0;
+    background:
+      repeating-linear-gradient(
+        0deg,
+        transparent,
+        transparent 39px,
+        rgba(244,240,232,0.03) 39px,
+        rgba(244,240,232,0.03) 40px
+      );
+    pointer-events: none;
+  }
+
+  /* Decorative routing lines */
+  .hero::after {
+    content: '';
+    position: absolute;
+    top: 40px;
+    right: -60px;
+    width: 280px;
+    height: 280px;
+    border: 1px solid rgba(194,59,34,0.15);
+    border-radius: 0;
+    transform: rotate(45deg);
+    pointer-events: none;
+  }
+
+  .hero .container { position: relative; z-index: 1; }
+
+  .hero h1 {
+    font-size: clamp(3rem, 7vw, 4.8rem);
+    font-weight: 900;
+    letter-spacing: -0.025em;
+    margin-bottom: 1.2rem;
+  }
+
+  .hero h1 span { color: var(--red); }
+
+  .hero .tagline {
+    font-family: 'Source Serif 4', serif;
+    font-size: clamp(1.1rem, 2.5vw, 1.35rem);
+    color: var(--manila);
+    max-width: 520px;
+    line-height: 1.55;
+    font-style: italic;
+  }
+
+  .hero-actions {
+    display: flex;
+    gap: 1rem;
+    margin-top: 2.2rem;
+    align-items: center;
+    flex-wrap: wrap;
+  }
+
+  .btn-primary {
+    display: inline-block;
+    font-family: 'Red Hat Display', sans-serif;
+    font-size: 0.9rem;
+    font-weight: 700;
+    color: var(--cream);
+    background: var(--red);
+    padding: 0.85em 1.8em;
+    text-decoration: none;
+    letter-spacing: 0.04em;
+    text-transform: uppercase;
+    transition: background 0.2s, transform 0.15s;
+  }
+
+  .btn-primary:hover {
+    background: #A83020;
+    color: var(--cream);
+    transform: translateY(-1px);
+  }
+
+  .btn-secondary {
+    display: inline-block;
+    font-family: 'Red Hat Display', sans-serif;
+    font-size: 0.9rem;
+    font-weight: 500;
+    color: var(--manila);
+    padding: 0.85em 1.8em;
+    text-decoration: none;
+    letter-spacing: 0.04em;
+    text-transform: uppercase;
+    border: 1px solid var(--counter);
+    transition: border-color 0.2s, color 0.2s;
+  }
+
+  .btn-secondary:hover {
+    border-color: var(--cream);
+    color: var(--cream);
+  }
+
+  .hero .version-badge {
+    display: inline-block;
+    margin-top: 1.8rem;
+    font-family: 'Red Hat Display', sans-serif;
+    font-size: 0.75rem;
+    font-weight: 500;
+    color: var(--counter);
+    letter-spacing: 0.06em;
+  }
+
+  /* ---- Stats strip ---- */
+
+  .stats-strip {
+    background: var(--ink);
+    border-bottom: 1px solid rgba(244,240,232,0.08);
+    padding: 1.6rem 0;
+  }
+
+  .stats-row {
+    display: flex;
+    justify-content: center;
+    gap: 3rem;
+    flex-wrap: wrap;
+  }
+
+  .stat {
+    text-align: center;
+  }
+
+  .stat-num {
+    font-family: 'Red Hat Display', sans-serif;
+    font-size: 1.6rem;
+    font-weight: 900;
+    color: var(--cream);
+    display: block;
+    line-height: 1;
+  }
+
+  .stat-label {
+    font-family: 'Red Hat Display', sans-serif;
+    font-size: 0.7rem;
+    font-weight: 500;
+    color: var(--counter);
+    text-transform: uppercase;
+    letter-spacing: 0.1em;
+    margin-top: 0.3rem;
+    display: block;
+  }
+
+  /* ---- Nav strip ---- */
+
+  .nav-strip {
+    background: var(--paper);
+    border-bottom: 1px solid var(--manila);
+    padding: 0.9rem 0;
+    position: sticky;
+    top: 0;
+    z-index: 100;
+  }
+
+  .nav-strip .container-wide {
+    display: flex;
+    gap: 2rem;
+    align-items: center;
+    flex-wrap: wrap;
+  }
+
+  .nav-strip a {
+    font-family: 'Red Hat Display', sans-serif;
+    font-size: 0.85rem;
+    font-weight: 500;
+    text-decoration: none;
+    color: var(--counter);
+    letter-spacing: 0.03em;
+    text-transform: uppercase;
+    transition: color 0.2s;
+  }
+
+  .nav-strip a:hover { color: var(--red); }
+
+  .nav-strip .brand {
+    font-weight: 700;
+    color: var(--ink);
+    margin-right: auto;
+    font-size: 0.9rem;
+  }
+
+  /* ---- Install ---- */
+
+  .install-section { background: var(--paper); }
+
+  .install-block {
+    background: var(--ink);
+    color: var(--cream);
+    padding: 1.6rem 2rem;
+    border-left: 4px solid var(--red);
+    position: relative;
+    overflow: hidden;
+  }
+
+  .install-block code {
+    font-size: 1.05rem;
+    display: block;
+  }
+
+  .install-block .prompt {
+    color: var(--counter);
+    user-select: none;
+  }
+
+  .install-alt {
+    margin-top: 1rem;
+    font-size: 0.92rem;
+    color: var(--counter);
+  }
+
+  .install-alt code {
+    background: rgba(27,29,35,0.07);
+    padding: 0.15em 0.4em;
+    font-size: 0.85rem;
+  }
+
+  /* ---- Section headers ---- */
+
+  .section-num {
+    font-family: 'Red Hat Display', sans-serif;
+    font-size: 0.78rem;
+    font-weight: 700;
+    color: var(--red);
+    text-transform: uppercase;
+    letter-spacing: 0.12em;
+    margin-bottom: 0.5rem;
+    display: block;
+  }
+
+  section h2 {
+    font-size: clamp(1.8rem, 4vw, 2.5rem);
+    margin-bottom: 1.5rem;
+    letter-spacing: -0.01em;
+  }
+
+  section h3 {
+    font-size: 1.15rem;
+    font-weight: 700;
+    margin-bottom: 0.5rem;
+    color: var(--ink);
+  }
+
+  /* ---- Setup steps ---- */
+
+  .steps {
+    counter-reset: step;
+    list-style: none;
+  }
+
+  .steps li {
+    counter-increment: step;
+    padding: 2rem 0 2rem 4.5rem;
+    border-bottom: 1px solid var(--manila);
+    position: relative;
+  }
+
+  .steps li:last-child { border-bottom: none; }
+
+  .steps li::before {
+    content: counter(step);
+    position: absolute;
+    left: 0;
+    top: 2rem;
+    font-family: 'Red Hat Display', sans-serif;
+    font-size: 1.6rem;
+    font-weight: 900;
+    color: var(--red);
+    width: 2.8rem;
+    height: 2.8rem;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    border: 2px solid var(--red);
+  }
+
+  .steps li h3 {
+    font-size: 1.1rem;
+    margin-bottom: 0.6rem;
+  }
+
+  .steps li p {
+    color: var(--counter);
+    font-size: 0.95rem;
+    margin-bottom: 0.5rem;
+  }
+
+  .steps li p:last-child { margin-bottom: 0; }
+
+  .steps a { color: var(--blue); }
+
+  .code-block {
+    background: var(--ink);
+    color: var(--cream);
+    padding: 1rem 1.4rem;
+    margin: 0.8rem 0;
+    border-left: 3px solid var(--manila);
+    overflow-x: auto;
+    white-space: pre;
+  }
+
+  .code-block .prompt { color: var(--counter); user-select: none; }
+
+  /* ---- Config JSON ---- */
+
+  .config-block {
+    background: var(--ink);
+    color: var(--cream);
+    padding: 1.4rem 1.8rem;
+    margin: 1rem 0;
+    border-left: 3px solid var(--blue);
+    font-size: 0.9rem;
+    line-height: 1.6;
+    overflow-x: auto;
+  }
+
+  .config-block .key { color: #7EB6D9; }
+  .config-block .str { color: #D4A373; }
+
+  /* ---- Accounts ---- */
+
+  .account-examples {
+    background: var(--paper);
+    border: 1px solid var(--manila);
+    padding: 1.8rem 2rem;
+    margin: 1.5rem 0;
+  }
+
+  .account-examples blockquote {
+    font-style: italic;
+    color: var(--counter);
+    padding: 0.4rem 0 0.4rem 1.2rem;
+    border-left: 3px solid var(--red);
+    margin: 0.6rem 0;
+    font-size: 0.95rem;
+  }
+
+  .account-examples blockquote strong { color: var(--ink); font-style: normal; }
+
+  /* ---- Capabilities ---- */
+
+  .cap-grid {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 1.5rem;
+    margin: 2rem 0;
+  }
+
+  @media (max-width: 600px) {
+    .cap-grid { grid-template-columns: 1fr; }
+  }
+
+  .cap-card {
+    background: var(--paper);
+    border: 1px solid var(--manila);
+    padding: 1.5rem 1.6rem;
+    transition: border-color 0.2s, transform 0.2s;
+  }
+
+  .cap-card:hover {
+    border-color: var(--counter);
+    transform: translateY(-2px);
+  }
+
+  .cap-card h3 {
+    font-family: 'Red Hat Display', sans-serif;
+    font-size: 1rem;
+    font-weight: 700;
+    margin-bottom: 0.4rem;
+    color: var(--red);
+  }
+
+  .cap-card p {
+    font-size: 0.9rem;
+    color: var(--counter);
+    line-height: 1.5;
+  }
+
+  /* ---- Workflows ---- */
+
+  .workflow-list {
+    column-count: 2;
+    column-gap: 2rem;
+    margin: 1.5rem 0;
+    list-style: none;
+  }
+
+  @media (max-width: 600px) {
+    .workflow-list { column-count: 1; }
+  }
+
+  .workflow-list li {
+    padding: 0.4rem 0;
+    font-size: 0.92rem;
+    break-inside: avoid;
+    color: var(--counter);
+    padding-left: 1.2rem;
+    position: relative;
+  }
+
+  .workflow-list li::before {
+    content: '';
+    position: absolute;
+    left: 0;
+    top: 0.75rem;
+    width: 6px;
+    height: 6px;
+    background: var(--red);
+  }
+
+  /* ---- CLI Reference ---- */
+
+  .cli-table {
+    width: 100%;
+    border-collapse: collapse;
+    margin: 1.5rem 0;
+    font-size: 0.9rem;
+  }
+
+  .cli-table th {
+    font-family: 'Red Hat Display', sans-serif;
+    text-align: left;
+    font-weight: 700;
+    font-size: 0.78rem;
+    text-transform: uppercase;
+    letter-spacing: 0.08em;
+    color: var(--counter);
+    border-bottom: 2px solid var(--ink);
+    padding: 0.6rem 1rem 0.6rem 0;
+  }
+
+  .cli-table td {
+    padding: 0.7rem 1rem 0.7rem 0;
+    border-bottom: 1px solid var(--manila);
+    vertical-align: top;
+  }
+
+  .cli-table code {
+    background: rgba(27,29,35,0.06);
+    padding: 0.2em 0.5em;
+    white-space: nowrap;
+  }
+
+  .cli-table td:last-child {
+    color: var(--counter);
+    font-size: 0.88rem;
+  }
+
+  /* ---- CTA Section ---- */
+
+  .cta-section {
+    background: var(--ink);
+    color: var(--cream);
+    padding: 5rem 0;
+    text-align: center;
+    border-bottom: none;
+    position: relative;
+    overflow: hidden;
+  }
+
+  .cta-section::before {
+    content: '';
+    position: absolute;
+    bottom: -100px;
+    left: -100px;
+    width: 300px;
+    height: 300px;
+    border: 1px solid rgba(194,59,34,0.1);
+    transform: rotate(45deg);
+    pointer-events: none;
+  }
+
+  .cta-section h2 {
+    color: var(--cream);
+    margin-bottom: 0.8rem;
+  }
+
+  .cta-section p {
+    color: var(--manila);
+    font-size: 1.05rem;
+    max-width: 460px;
+    margin: 0 auto 2rem;
+  }
+
+  .cta-install {
+    background: rgba(244,240,232,0.05);
+    border: 1px solid rgba(244,240,232,0.1);
+    display: inline-block;
+    padding: 1rem 2rem;
+    margin-top: 1rem;
+  }
+
+  .cta-install code {
+    color: var(--cream);
+    font-size: 1rem;
+  }
+
+  .cta-install .prompt { color: var(--counter); user-select: none; }
+
+  /* ---- Footer ---- */
+
+  footer {
+    background: var(--ink);
+    color: var(--manila);
+    padding: 4rem 0;
+    border-top: 4px solid var(--red);
+    position: relative;
+  }
+
+  .footer-grid {
+    display: flex;
+    justify-content: space-between;
+    align-items: flex-start;
+    flex-wrap: wrap;
+    gap: 2rem;
+  }
+
+  .footer-brand h4 {
+    font-family: 'Red Hat Display', sans-serif;
+    font-size: 1.1rem;
+    color: var(--cream);
+    margin-bottom: 0.5rem;
+  }
+
+  .footer-brand p {
+    font-size: 0.88rem;
+    line-height: 1.5;
+    max-width: 320px;
+  }
+
+  .footer-brand a {
+    color: var(--cream);
+    text-decoration-color: var(--counter);
+  }
+
+  .footer-brand a:hover { color: var(--red); }
+
+  .footer-links {
+    list-style: none;
+    display: flex;
+    gap: 1.8rem;
+  }
+
+  .footer-links a {
+    font-family: 'Red Hat Display', sans-serif;
+    font-size: 0.82rem;
+    font-weight: 500;
+    color: var(--manila);
+    text-decoration: none;
+    text-transform: uppercase;
+    letter-spacing: 0.06em;
+  }
+
+  .footer-links a:hover { color: var(--cream); }
+
+  .footer-legal {
+    margin-top: 3rem;
+    padding-top: 1.5rem;
+    border-top: 1px solid rgba(244,240,232,0.1);
+    font-size: 0.78rem;
+    color: var(--counter);
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    flex-wrap: wrap;
+    gap: 1rem;
+  }
+
+  .stamp {
+    font-family: 'Red Hat Display', sans-serif;
+    font-weight: 900;
+    font-size: 0.7rem;
+    letter-spacing: 0.15em;
+    text-transform: uppercase;
+    color: var(--red);
+    border: 2px solid var(--red);
+    padding: 0.4em 0.8em;
+    transform: rotate(-3deg);
+    display: inline-block;
+    opacity: 0.8;
+  }
+
+  /* ---- Scroll animations ---- */
+
+  .reveal {
+    opacity: 0;
+    transform: translateY(20px);
+    transition: opacity 0.6s ease, transform 0.6s ease;
+  }
+
+  .reveal.visible {
+    opacity: 1;
+    transform: translateY(0);
+  }
+
+  .stagger .reveal:nth-child(1) { transition-delay: 0s; }
+  .stagger .reveal:nth-child(2) { transition-delay: 0.08s; }
+  .stagger .reveal:nth-child(3) { transition-delay: 0.16s; }
+  .stagger .reveal:nth-child(4) { transition-delay: 0.24s; }
+
+  /* ---- Responsive ---- */
+
+  @media (max-width: 600px) {
+    section { padding: 3rem 0; }
+    .hero { padding: 4rem 0 3.5rem; }
+    .hero h1 { font-size: 2.4rem; }
+    .hero-actions { flex-direction: column; align-items: flex-start; }
+    .stats-row { gap: 1.5rem; }
+    .steps li { padding-left: 3.5rem; }
+    .steps li::before { font-size: 1.2rem; width: 2.2rem; height: 2.2rem; }
+    .footer-grid { flex-direction: column; }
+    .footer-links { flex-wrap: wrap; gap: 1rem; }
+    .footer-legal { flex-direction: column; text-align: center; }
+    .cta-section { padding: 3.5rem 0; }
+  }
+</style>
+</head>
+<body>
+
+<!-- Hero -->
+<header class="hero">
+  <div class="container">
+    <h1>GSuite <span>MCP</span> Server</h1>
+    <p class="tagline">Connect your AI to Gmail, Calendar, Contacts, and Tasks. One command to install. Four steps to set up.</p>
+    <div class="hero-actions">
+      <a href="#install" class="btn-primary">Get started</a>
+      <a href="https://github.com/2389-research/gsuite-mcp" class="btn-secondary">View on GitHub</a>
+    </div>
+    <span class="version-badge">v1.4.1 -- open source, MIT licensed</span>
+  </div>
+</header>
+
+<!-- Stats -->
+<div class="stats-strip">
+  <div class="container-wide">
+    <div class="stats-row">
+      <div class="stat">
+        <span class="stat-num">33</span>
+        <span class="stat-label">MCP tools</span>
+      </div>
+      <div class="stat">
+        <span class="stat-num">4</span>
+        <span class="stat-label">Google APIs</span>
+      </div>
+      <div class="stat">
+        <span class="stat-num">10</span>
+        <span class="stat-label">Workflow prompts</span>
+      </div>
+      <div class="stat">
+        <span class="stat-num">11</span>
+        <span class="stat-label">Live resources</span>
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- Nav -->
+<nav class="nav-strip" aria-label="Main navigation">
+  <div class="container-wide">
+    <a href="https://github.com/2389-research/gsuite-mcp" class="brand">gsuite-mcp</a>
+    <a href="#install">Install</a>
+    <a href="#setup">Setup</a>
+    <a href="#accounts">Accounts</a>
+    <a href="#capabilities">What it does</a>
+    <a href="#cli">CLI</a>
+    <a href="https://github.com/2389-research/gsuite-mcp">GitHub</a>
+  </div>
+</nav>
+
+<main>
+<!-- Install -->
+<section class="install-section" id="install">
+  <div class="container">
+    <span class="section-num">Install</span>
+    <h2>One command</h2>
+    <div class="install-block">
+      <code><span class="prompt">$ </span>brew install 2389-research/tap/gsuite-mcp</code>
+    </div>
+    <p class="install-alt">Or build from source: <code>go build ./cmd/gsuite-mcp</code></p>
+  </div>
+</section>
+
+<!-- Setup -->
+<section id="setup">
+  <div class="container">
+    <span class="section-num">Setup</span>
+    <h2>Four steps, then you're done</h2>
+    <ol class="steps">
+      <li class="reveal">
+        <h3>Create OAuth credentials</h3>
+        <p>Go to <a href="https://console.cloud.google.com/apis/credentials" target="_blank" rel="noopener">Google Cloud Console</a>. Create a project, click <strong>+ CREATE CREDENTIALS</strong>, pick <strong>OAuth client ID</strong>, select <strong>Desktop app</strong>.</p>
+        <p>Download the JSON and save it:</p>
+        <div class="code-block"><code>~/.config/gsuite-mcp/credentials.json</code></div>
+      </li>
+      <li class="reveal">
+        <h3>Enable the APIs</h3>
+        <p>Click "Enable" on each:</p>
+        <p>
+          <a href="https://console.cloud.google.com/apis/library/gmail.googleapis.com" target="_blank" rel="noopener">Gmail</a> &middot;
+          <a href="https://console.cloud.google.com/apis/library/calendar-json.googleapis.com" target="_blank" rel="noopener">Calendar</a> &middot;
+          <a href="https://console.cloud.google.com/apis/library/people.googleapis.com" target="_blank" rel="noopener">People</a> &middot;
+          <a href="https://console.cloud.google.com/apis/library/tasks.googleapis.com" target="_blank" rel="noopener">Tasks</a>
+        </p>
+      </li>
+      <li class="reveal">
+        <h3>Authenticate</h3>
+        <div class="code-block"><code><span class="prompt">$ </span>gsuite-mcp setup</code></div>
+        <p>Opens a browser. Sign in with Google. Token saved locally, you only do this once.</p>
+      </li>
+      <li class="reveal">
+        <h3>Add to your AI client</h3>
+        <p>For Claude Code, one command:</p>
+        <div class="code-block"><code><span class="prompt">$ </span>claude mcp add gsuite gsuite-mcp -- mcp</code></div>
+        <p>Use <code>--scope user</code> to make it available across all projects:</p>
+        <div class="code-block"><code><span class="prompt">$ </span>claude mcp add gsuite gsuite-mcp --scope user -- mcp</code></div>
+        <p>For Claude Desktop or other MCP clients, add this to your config:</p>
+        <div class="config-block"><pre>{
+  <span class="key">"mcpServers"</span>: {
+    <span class="key">"gsuite"</span>: {
+      <span class="key">"command"</span>: <span class="str">"gsuite-mcp"</span>,
+      <span class="key">"args"</span>: [<span class="str">"mcp"</span>]
+    }
+  }
+}</pre></div>
+        <p>Done. Your AI works with your Google account now.</p>
+      </li>
+    </ol>
+  </div>
+</section>
+
+<!-- Accounts -->
+<section id="accounts">
+  <div class="container">
+    <span class="section-num">Multiple accounts</span>
+    <h2>Work and personal, side by side</h2>
+    <p>Connect as many Google accounts as you need:</p>
+    <div class="code-block"><code><span class="prompt">$ </span>gsuite-mcp setup --account work
+<span class="prompt">$ </span>gsuite-mcp setup --account personal</code></div>
+    <p>Then just say which one you mean:</p>
+    <div class="account-examples">
+      <blockquote>"Check my <strong>work</strong> email for anything urgent"</blockquote>
+      <blockquote>"What's on my <strong>personal</strong> calendar this week?"</blockquote>
+    </div>
+    <p>Every tool accepts an optional <code>account</code> parameter. Without it, the default account is used.</p>
+    <div class="code-block"><code><span class="prompt">$ </span>gsuite-mcp whoami --account work
+Account:  work
+Email:    harper@2389.ai
+Messages: 4210 total
+Threads:  1847 total</code></div>
+  </div>
+</section>
+
+<!-- Capabilities -->
+<section id="capabilities">
+  <div class="container">
+    <span class="section-num">Capabilities</span>
+    <h2>What it does</h2>
+    <p>33 tools across four Google APIs.</p>
+    <div class="cap-grid stagger">
+      <div class="cap-card reveal">
+        <h3>Gmail</h3>
+        <p>Read, search, send, draft, label, trash, delete. CC and BCC supported.</p>
+      </div>
+      <div class="cap-card reveal">
+        <h3>Calendar</h3>
+        <p>List, view, create, update, and delete events across your calendars.</p>
+      </div>
+      <div class="cap-card reveal">
+        <h3>Contacts</h3>
+        <p>Search, browse, create, update, and delete contacts via the People API.</p>
+      </div>
+      <div class="cap-card reveal">
+        <h3>Tasks</h3>
+        <p>Manage task lists and individual tasks. Create, update, complete, delete.</p>
+      </div>
+    </div>
+
+    <h3>Built-in workflows</h3>
+    <p>The server ships with prompts your AI picks up automatically:</p>
+    <ul class="workflow-list">
+      <li>Triage and organize unread email</li>
+      <li>Compose emails with proper threading</li>
+      <li>Schedule meetings around availability</li>
+      <li>Summarize your calendar</li>
+      <li>Review and organize pending tasks</li>
+      <li>Break goals into task lists</li>
+      <li>Look up contact details</li>
+      <li>Add contacts from email threads</li>
+    </ul>
+
+    <h3>Live data</h3>
+    <p>MCP resources give your AI quick context: today's calendar, upcoming events, unread mail, current drafts, tasks due today, overdue tasks.</p>
+  </div>
+</section>
+
+<!-- CLI -->
+<section id="cli">
+  <div class="container">
+    <span class="section-num">Reference</span>
+    <h2>CLI commands</h2>
+    <table class="cli-table">
+      <thead>
+        <tr><th>Command</th><th>What it does</th></tr>
+      </thead>
+      <tbody>
+        <tr><td><code>gsuite-mcp setup</code></td><td>Interactive setup wizard</td></tr>
+        <tr><td><code>gsuite-mcp setup --account work</code></td><td>Set up a named account</td></tr>
+        <tr><td><code>gsuite-mcp test</code></td><td>Test your API connection</td></tr>
+        <tr><td><code>gsuite-mcp whoami</code></td><td>Show authenticated user</td></tr>
+        <tr><td><code>gsuite-mcp mcp</code></td><td>Start the MCP server</td></tr>
+        <tr><td><code>gsuite-mcp version</code></td><td>Show version</td></tr>
+      </tbody>
+    </table>
+  </div>
+</section>
+
+<!-- Final CTA -->
+<section class="cta-section">
+  <div class="container">
+    <span class="section-num" style="color: var(--red);">Get started</span>
+    <h2>Ready in five minutes</h2>
+    <p>Install it, authenticate with Google, drop the config into your AI client. That's the whole thing.</p>
+    <a href="#install" class="btn-primary">Start setup</a>
+    <div class="cta-install">
+      <code><span class="prompt">$ </span>brew install 2389-research/tap/gsuite-mcp</code>
+    </div>
+  </div>
+</section>
+
+</main>
+
+<!-- Footer -->
+<footer>
+  <div class="container">
+    <div class="footer-grid">
+      <div class="footer-brand">
+        <h4>GSuite MCP Server</h4>
+        <p>Built by <a href="https://2389.ai">2389 Research Inc.</a><br>Open source under the MIT license.</p>
+      </div>
+      <ul class="footer-links">
+        <li><a href="https://github.com/2389-research/gsuite-mcp" rel="noopener">GitHub</a></li>
+        <li><a href="https://2389.ai" rel="noopener">2389.ai</a></li>
+        <li><a href="https://github.com/2389-research/gsuite-mcp/issues" rel="noopener">Issues</a></li>
+      </ul>
+    </div>
+    <div class="footer-legal">
+      <span>&copy; 2025-2026 2389 Research Inc. All rights reserved.</span>
+      <span class="stamp">Sorted &amp; Delivered</span>
+    </div>
+  </div>
+</footer>
+
+<script>
+// Scroll reveal
+const observer = new IntersectionObserver((entries) => {
+  entries.forEach(entry => {
+    if (entry.isIntersecting) {
+      entry.target.classList.add('visible');
+    }
+  });
+}, { threshold: 0.15, rootMargin: '0px 0px -40px 0px' });
+
+document.querySelectorAll('.reveal').forEach(el => observer.observe(el));
+
+// Smooth scroll for nav and CTA links
+document.querySelectorAll('a[href^="#"]').forEach(link => {
+  link.addEventListener('click', (e) => {
+    const target = document.querySelector(link.getAttribute('href'));
+    if (target) {
+      e.preventDefault();
+      const nav = document.querySelector('.nav-strip');
+      const offset = nav ? nav.offsetHeight + 20 : 20;
+      window.scrollTo({
+        top: target.offsetTop - offset,
+        behavior: 'smooth'
+      });
+    }
+  });
+});
+</script>
+
+</body>
+</html>
