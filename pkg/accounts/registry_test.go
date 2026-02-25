@@ -7,6 +7,8 @@ import (
 	"net/http"
 	"os"
 	"path/filepath"
+	"strings"
+	"sync"
 	"testing"
 
 	"github.com/stretchr/testify/assert"
@@ -129,7 +131,7 @@ func TestValidateAlias(t *testing.T) {
 		{"/absolute", true},          // starts with slash
 		{"hello world", true},        // spaces
 		{"-leading-dash", true},      // starts with non-alphanumeric
-		{"a" + string(make([]byte, 64)), true}, // too long
+		{strings.Repeat("a", 65), true},        // too long (65 chars, limit is 64)
 	}
 
 	for _, tt := range tests {
@@ -204,7 +206,7 @@ func TestLoadRegistry_InvalidAliasInConfig(t *testing.T) {
 	assert.Contains(t, err.Error(), "invalid account alias")
 }
 
-func TestAccount_ClientThreadSafety(t *testing.T) {
+func TestAccount_ClientAccessors(t *testing.T) {
 	acct := &Account{Alias: "test"}
 
 	// Verify GetClient/SetClient work
@@ -216,6 +218,41 @@ func TestAccount_ClientThreadSafety(t *testing.T) {
 
 	acct.SetClient(nil)
 	assert.Nil(t, acct.GetClient())
+}
+
+func TestAccount_ClientConcurrentAccess(t *testing.T) {
+	acct := &Account{Alias: "test"}
+	clients := make([]*http.Client, 10)
+	for i := range clients {
+		clients[i] = &http.Client{}
+	}
+
+	var wg sync.WaitGroup
+	// Concurrent writers
+	for i := 0; i < 10; i++ {
+		wg.Add(1)
+		go func(c *http.Client) {
+			defer wg.Done()
+			for j := 0; j < 100; j++ {
+				acct.SetClient(c)
+			}
+		}(clients[i])
+	}
+	// Concurrent readers
+	for i := 0; i < 10; i++ {
+		wg.Add(1)
+		go func() {
+			defer wg.Done()
+			for j := 0; j < 100; j++ {
+				_ = acct.GetClient()
+			}
+		}()
+	}
+	wg.Wait()
+
+	// After all goroutines finish, client should be one of the set values
+	got := acct.GetClient()
+	assert.NotNil(t, got)
 }
 
 func TestRegistry_ConcurrentAccess(t *testing.T) {

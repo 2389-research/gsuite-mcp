@@ -122,6 +122,14 @@ gsuite-mcp version                 # Show version
 gsuite-mcp help                    # Show help
 ```
 
+## Documentation
+
+See [docs/](docs/) for detailed guides:
+
+- [Setup](docs/setup.md) -- step-by-step setup with screenshots
+- [Usage](docs/usage.md) -- full tool reference and examples
+- [ISH Mode](docs/ISH_MODE.md) -- testing with a local mock server
+
 ## Contributing
 
 1. Fork the repo

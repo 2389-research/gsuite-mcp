@@ -39,22 +39,22 @@ func ValidateAlias(alias string) error {
 type Account struct {
 	Alias     string       `json:"-"`
 	TokenPath string       `json:"token_path"`
-	mu        sync.RWMutex // protects Client field
-	Client    *http.Client `json:"-"`
+	mu        sync.RWMutex // protects client field
+	client    *http.Client
 }
 
 // GetClient returns the account's HTTP client in a thread-safe manner.
 func (a *Account) GetClient() *http.Client {
 	a.mu.RLock()
 	defer a.mu.RUnlock()
-	return a.Client
+	return a.client
 }
 
 // SetClient sets the account's HTTP client in a thread-safe manner.
 func (a *Account) SetClient(client *http.Client) {
 	a.mu.Lock()
 	defer a.mu.Unlock()
-	a.Client = client
+	a.client = client
 }
 
 // Registry manages multiple Google accounts
