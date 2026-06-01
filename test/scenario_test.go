@@ -285,7 +285,7 @@ func TestScenario_MCPServerIntegration(t *testing.T) {
 
 	t.Run("Verify all tools registered", func(t *testing.T) {
 		tools := srv.ListTools()
-		require.Len(t, tools, 19, "Expected 19 tools to be registered")
+		require.Len(t, tools, 34, "Expected 34 tools to be registered")
 
 		toolNames := make([]string, len(tools))
 		for i, tool := range tools {
@@ -300,7 +300,7 @@ func TestScenario_MCPServerIntegration(t *testing.T) {
 		assert.Contains(t, toolNames, "people_search_contacts")
 		assert.Contains(t, toolNames, "people_get_contact")
 
-		t.Logf("All 19 MCP tools verified: %v", toolNames)
+		t.Logf("All 34 MCP tools verified: %v", toolNames)
 	})
 
 	t.Log("MCP server integration test complete")

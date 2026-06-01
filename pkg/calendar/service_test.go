@@ -5,6 +5,7 @@ package calendar
 
 import (
 	"context"
+	"net/http"
 	"testing"
 	"time"
 
@@ -25,12 +26,13 @@ func TestNewService_WithIshMode(t *testing.T) {
 func TestNewService_WithoutIshMode(t *testing.T) {
 	t.Setenv("ISH_MODE", "false")
 
-	// Without credentials, this should fail
-	_, err := NewService(context.Background(), nil)
+	// Outside ish mode the server always supplies an authenticated HTTP client.
+	// With a client provided, NewService builds without consulting ambient
+	// credentials, so the result is deterministic regardless of environment.
+	svc, err := NewService(context.Background(), &http.Client{})
 
-	// We expect an error when no credentials are available
-	require.Error(t, err)
-	assert.Contains(t, err.Error(), "unable to create Calendar service")
+	require.NoError(t, err)
+	assert.NotNil(t, svc)
 }
 
 func TestService_ListEvents(t *testing.T) {
