@@ -178,7 +178,7 @@ MCP CLIENT CONFIGURATION:
     }
 
 FEATURES:
-    • 33 MCP tools for Gmail, Calendar, Contacts, and Tasks
+    • 34 MCP tools for Gmail, Calendar, Contacts, and Tasks
     • 10 MCP prompts for common workflows
     • 11 MCP resources for dynamic data access
     • Automatic retry logic with exponential backoff

@@ -40,7 +40,7 @@ Click "Enable" on each of these:
 gsuite-mcp setup
 ```
 
-This opens a browser to sign in with Google. The token is saved locally so you only do this once.
+This prints a Google sign-in link. Open it, approve access, and paste the code back into the terminal. The token is saved locally, so you only do this once.
 
 ### 4. Connect to your AI client
 
@@ -92,7 +92,7 @@ Threads:  1847 total
 
 ## What it can do
 
-33 tools across four Google APIs, plus prompts and live data.
+34 tools across four Google APIs, plus prompts and live data.
 
 **Gmail** -- read, search, send, draft, label, trash, delete. CC/BCC supported.
 

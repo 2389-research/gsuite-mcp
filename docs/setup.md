@@ -4,7 +4,7 @@ This guide covers setting up the GSuite MCP server with both OAuth 2.0 authentic
 
 ## Prerequisites
 
-- Go 1.21 or later
+- Go 1.25 or later
 - Google Cloud account (for OAuth setup)
 - Access to Google Workspace APIs
 
@@ -75,7 +75,7 @@ Enable the following APIs for your project:
 4. Name: "GSuite MCP Client"
 5. Click "Create"
 6. Download the JSON file
-7. Save as `credentials.json` in the same directory as the binary
+7. Save it as `~/.config/gsuite-mcp/credentials.json` (the default location; `gsuite-mcp setup` prints the exact path and offers to create the directory)
 
 ### Step 5: First Run and Authorization
 
@@ -99,7 +99,7 @@ Enter authorization code:
 4. Copy the authorization code from the browser
 5. Paste into the terminal and press Enter
 
-The server will save the token to `token.json` for future use. You won't need to authorize again unless you revoke the token.
+The server saves the token to `~/.local/share/gsuite-mcp/token.json` for future use. You won't need to authorize again unless you revoke the token.
 
 ### Step 6: Verify Setup
 
@@ -142,11 +142,7 @@ You'll need a mock server that implements the Google Workspace API endpoints. Th
 2. Accept Bearer token authentication with format `Bearer user:USERNAME`
 3. Implement endpoints for Gmail, Calendar, and People APIs
 
-Example using the ish framework:
-```bash
-# Start ish mock server
-ish server start --port 9000
-```
+No mock server is bundled with this repo — supply one that implements the endpoints above. See [ISH Mode](ISH_MODE.md) for details.
 
 ### Step 3: Run the Server
 
@@ -212,7 +208,7 @@ For ish mode testing:
 
 ### "credentials.json not found"
 
-Make sure `credentials.json` is in the same directory as the binary, or set the path:
+Make sure `credentials.json` is at `~/.config/gsuite-mcp/credentials.json`, or set the path:
 
 ```bash
 export GSUITE_MCP_CREDENTIALS_PATH=/path/to/credentials.json
@@ -228,10 +224,10 @@ Check that all required APIs are enabled in Google Cloud Console:
 
 ### OAuth Token Expired
 
-Delete `token.json` and re-run the server. You'll be prompted to re-authorize.
+Delete the token and re-run setup. You'll be prompted to re-authorize.
 
 ```bash
-rm token.json
+rm ~/.local/share/gsuite-mcp/token.json
 ./gsuite-mcp setup
 ```
 
@@ -294,7 +290,7 @@ The accounts registry is stored at `~/.config/gsuite-mcp/accounts.json`. Running
 
 Pass `account: "<alias>"` to any tool. If omitted, the default account is used. Use `accounts_list()` to see all configured accounts.
 
-See the [README](../README.md#multi-account-support) for full configuration details and MCP auth tool examples.
+See the [README](../README.md#multiple-accounts) for full configuration details and MCP auth tool examples.
 
 ## Next Steps
 
