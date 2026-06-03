@@ -17,7 +17,7 @@ import (
 	"github.com/harper/gsuite-mcp/pkg/server"
 )
 
-const version = "1.4.2"
+var version = "1.4.2"
 
 func main() {
 	if len(os.Args) < 2 {
@@ -192,6 +192,8 @@ DOCUMENTATION:
 }
 
 func startMCPServer() {
+	server.Version = version
+
 	ctx := context.Background()
 
 	srv, err := server.NewServer(ctx)

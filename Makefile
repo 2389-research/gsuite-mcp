@@ -6,7 +6,8 @@ BUILD_DIR=.
 CMD_DIR=./cmd/gsuite-mcp
 GO=go
 GOFLAGS=
-LDFLAGS=-ldflags "-s -w"
+VERSION ?= $(shell git describe --tags --always --dirty 2>/dev/null || echo dev)
+LDFLAGS=-ldflags "-s -w -X main.version=$(VERSION)"
 
 # Build targets
 .PHONY: all build clean test lint install run help

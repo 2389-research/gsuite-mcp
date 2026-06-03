@@ -28,6 +28,11 @@ import (
 	googletasks "google.golang.org/api/tasks/v1"
 )
 
+// Version is the build version reported to MCP clients. main sets it from its own
+// ldflag-injected version before calling NewServer; a caller that constructs a server
+// without setting it first reports this "dev" default.
+var Version = "dev"
+
 // AccountServices holds all Google service instances for a single account
 type AccountServices struct {
 	Gmail    *gmail.Service
@@ -117,7 +122,7 @@ func NewServer(ctx context.Context) (*Server, error) {
 	// Create MCP server
 	mcpServer := server.NewMCPServer(
 		"gsuite-mcp",
-		"1.0.0",
+		Version,
 	)
 
 	s.mcp = mcpServer
