@@ -165,9 +165,12 @@ func (s *Server) resolveServices(ctx context.Context, alias string) (*AccountSer
 		if authErr != nil {
 			return nil, fmt.Errorf("account '%s' is not authenticated: %w (use auth_init tool to authenticate)", acct.Alias, authErr)
 		}
-		authedClient, clientErr := authenticator.GetClient(ctx)
+		authedClient, clientErr := authenticator.GetClientIfAuthenticated(ctx)
 		if clientErr != nil {
 			return nil, fmt.Errorf("account '%s' authentication failed: %w (token may be expired, use auth_init to re-authenticate)", acct.Alias, clientErr)
+		}
+		if authedClient == nil {
+			return nil, fmt.Errorf("account '%s' is not authenticated (use auth_init tool to authenticate)", acct.Alias)
 		}
 		acct.SetClient(authedClient)
 		client = authedClient
