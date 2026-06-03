@@ -114,16 +114,12 @@ func (s *Service) CreateEvent(ctx context.Context, summary, description string, 
 		event.Attendees = eventAttendees
 	}
 
-	var created *calendar.Event
-	err := retry.WithRetry(func() error {
-		var err error
-		created, err = s.svc.Events.Insert("primary", event).
-			Context(ctx).
-			SendNotifications(sendNotifications).
-			Do()
-		return err
-	}, 3, time.Second)
-
+	// Event creates are not retried: a retry after a request that succeeded but
+	// whose response was lost would create a duplicate calendar event.
+	created, err := s.svc.Events.Insert("primary", event).
+		Context(ctx).
+		SendNotifications(sendNotifications).
+		Do()
 	if err != nil {
 		return nil, fmt.Errorf("unable to create event: %w", err)
 	}
