@@ -179,13 +179,9 @@ func (s *Service) SendMessage(ctx context.Context, to, subject, body, inReplyTo,
 		ThreadId: threadId, // Set thread ID for proper threading
 	}
 
-	var sent *gmail.Message
-	err := retry.WithRetry(func() error {
-		var err error
-		sent, err = s.svc.Users.Messages.Send("me", msg).Context(ctx).Do()
-		return err
-	}, 3, time.Second)
-
+	// Sends are not retried: a retry after a request that succeeded but whose
+	// response was lost would deliver the message twice.
+	sent, err := s.svc.Users.Messages.Send("me", msg).Context(ctx).Do()
 	if err != nil {
 		return nil, fmt.Errorf("unable to send message: %w", err)
 	}
@@ -324,13 +320,9 @@ func (s *Service) CreateDraft(ctx context.Context, to, subject, body, inReplyTo,
 		},
 	}
 
-	var created *gmail.Draft
-	err := retry.WithRetry(func() error {
-		var err error
-		created, err = s.svc.Users.Drafts.Create("me", draft).Context(ctx).Do()
-		return err
-	}, 3, time.Second)
-
+	// Drafts are not retried: a retry after a request that succeeded but whose
+	// response was lost would create a duplicate draft.
+	created, err := s.svc.Users.Drafts.Create("me", draft).Context(ctx).Do()
 	if err != nil {
 		return nil, fmt.Errorf("unable to create draft: %w", err)
 	}
@@ -363,13 +355,9 @@ func (s *Service) SendDraft(ctx context.Context, draftID string) (*gmail.Message
 		Id: draftID,
 	}
 
-	var sent *gmail.Message
-	err := retry.WithRetry(func() error {
-		var err error
-		sent, err = s.svc.Users.Drafts.Send("me", draft).Context(ctx).Do()
-		return err
-	}, 3, time.Second)
-
+	// Sends are not retried: a retry after a request that succeeded but whose
+	// response was lost would deliver the draft twice.
+	sent, err := s.svc.Users.Drafts.Send("me", draft).Context(ctx).Do()
 	if err != nil {
 		return nil, fmt.Errorf("unable to send draft: %w", err)
 	}
@@ -491,13 +479,10 @@ func (s *Service) CreateLabel(ctx context.Context, name string, labelListVisibil
 		label.MessageListVisibility = messageListVisibility
 	}
 
-	var created *gmail.Label
-	err := retry.WithRetry(func() error {
-		var err error
-		created, err = s.svc.Users.Labels.Create("me", label).Context(ctx).Do()
-		return err
-	}, 3, time.Second)
-
+	// Label creates are not retried: a retry after a request that succeeded but
+	// whose response was lost would surface a spurious 409 Conflict (Gmail
+	// enforces label-name uniqueness) for an operation that already succeeded.
+	created, err := s.svc.Users.Labels.Create("me", label).Context(ctx).Do()
 	if err != nil {
 		return nil, fmt.Errorf("unable to create label: %w", err)
 	}

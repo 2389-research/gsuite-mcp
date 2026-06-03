@@ -66,14 +66,11 @@ func (s *Service) ListTaskLists(ctx context.Context) ([]*tasks.TaskList, error) 
 
 // CreateTaskList creates a new task list
 func (s *Service) CreateTaskList(ctx context.Context, title string) (*tasks.TaskList, error) {
-	var result *tasks.TaskList
-	err := retry.WithRetry(func() error {
-		var err error
-		result, err = s.svc.Tasklists.Insert(&tasks.TaskList{
-			Title: title,
-		}).Context(ctx).Do()
-		return err
-	}, 3, time.Second)
+	// Task list creates are not retried: a retry after a request that succeeded but
+	// whose response was lost would create a duplicate task list.
+	result, err := s.svc.Tasklists.Insert(&tasks.TaskList{
+		Title: title,
+	}).Context(ctx).Do()
 	if err != nil {
 		return nil, fmt.Errorf("failed to create task list: %w", err)
 	}
@@ -140,16 +137,13 @@ func (s *Service) CreateTask(ctx context.Context, tasklistID string, task *tasks
 		tasklistID = "@default"
 	}
 
-	var result *tasks.Task
-	err := retry.WithRetry(func() error {
-		call := s.svc.Tasks.Insert(tasklistID, task).Context(ctx)
-		if parent != "" {
-			call = call.Parent(parent)
-		}
-		var err error
-		result, err = call.Do()
-		return err
-	}, 3, time.Second)
+	// Task creates are not retried: a retry after a request that succeeded but
+	// whose response was lost would create a duplicate task.
+	call := s.svc.Tasks.Insert(tasklistID, task).Context(ctx)
+	if parent != "" {
+		call = call.Parent(parent)
+	}
+	result, err := call.Do()
 	if err != nil {
 		return nil, fmt.Errorf("failed to create task: %w", err)
 	}

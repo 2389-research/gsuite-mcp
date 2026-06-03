@@ -120,14 +120,9 @@ func (s *Service) GetPerson(ctx context.Context, resourceName string) (*people.P
 
 // CreateContact creates a new contact
 func (s *Service) CreateContact(ctx context.Context, person *people.Person) (*people.Person, error) {
-	var created *people.Person
-
-	err := retry.WithRetry(func() error {
-		var err error
-		created, err = s.svc.People.CreateContact(person).Context(ctx).Do()
-		return err
-	}, 3, time.Second)
-
+	// Contact creates are not retried: a retry after a request that succeeded but
+	// whose response was lost would create a duplicate contact.
+	created, err := s.svc.People.CreateContact(person).Context(ctx).Do()
 	if err != nil {
 		return nil, fmt.Errorf("unable to create contact: %w", err)
 	}
