@@ -30,3 +30,6 @@ token.json
 # Environment
 .env
 .scratch/
+
+# Private/local data (never commit)
+.private-journal/
