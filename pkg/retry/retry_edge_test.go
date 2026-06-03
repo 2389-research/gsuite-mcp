@@ -337,7 +337,7 @@ func TestShouldRetryBoundaryStatusCodes(t *testing.T) {
 	for _, tc := range testCases {
 		t.Run(tc.name, func(t *testing.T) {
 			err := &mockHTTPError{StatusCode: tc.statusCode}
-			result := shouldRetry(err)
+			result, _ := shouldRetry(err)
 			assert.Equal(t, tc.expectedRetry, result, "Status code %d retry behavior incorrect", tc.statusCode)
 		})
 	}

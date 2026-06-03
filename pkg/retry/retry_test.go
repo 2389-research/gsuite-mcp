@@ -4,11 +4,14 @@
 package retry
 
 import (
+	"context"
 	"errors"
 	"fmt"
 	"net/http"
 	"testing"
 	"time"
+
+	"google.golang.org/api/googleapi"
 )
 
 // mockHTTPError simulates HTTP errors with status codes
@@ -37,9 +40,7 @@ func TestRetrySucceedsAfterFailures(t *testing.T) {
 		return nil // Success on third attempt
 	}
 
-	start := time.Now()
 	err := WithRetry(operation, 5, 10*time.Millisecond)
-	duration := time.Since(start)
 
 	if err != nil {
 		t.Errorf("Expected retry to succeed, got error: %v", err)
@@ -47,12 +48,6 @@ func TestRetrySucceedsAfterFailures(t *testing.T) {
 
 	if attemptCount != maxAttempts {
 		t.Errorf("Expected %d attempts, got %d", maxAttempts, attemptCount)
-	}
-
-	// Verify exponential backoff occurred (should take at least 10ms + 20ms = 30ms)
-	minExpectedDuration := 30 * time.Millisecond
-	if duration < minExpectedDuration {
-		t.Errorf("Expected backoff duration >= %v, got %v", minExpectedDuration, duration)
 	}
 }
 
@@ -206,23 +201,78 @@ func TestExponentialBackoff(t *testing.T) {
 		t.Fatalf("Expected 3 delays, got %d", len(delays))
 	}
 
-	// Verify exponential backoff (with some tolerance for timing variance)
+	// Full jitter means each delay is in [0, cap]; assert the (jittered) upper bound.
 	tolerance := 10 * time.Millisecond
-
-	// First delay should be ~baseDelay (20ms)
-	if delays[0] < baseDelay-tolerance || delays[0] > baseDelay+tolerance {
-		t.Errorf("First delay expected ~%v, got %v", baseDelay, delays[0])
+	caps := []time.Duration{baseDelay, 2 * baseDelay, 4 * baseDelay} // 20ms, 40ms, 80ms
+	for i, d := range delays {
+		if d < 0 || d > caps[i]+tolerance {
+			t.Errorf("delay %d = %v, want within [0, %v]", i, d, caps[i]+tolerance)
+		}
 	}
+}
 
-	// Second delay should be ~2*baseDelay (40ms)
-	expectedSecond := 2 * baseDelay
-	if delays[1] < expectedSecond-tolerance || delays[1] > expectedSecond+tolerance {
-		t.Errorf("Second delay expected ~%v, got %v", expectedSecond, delays[1])
+// TestRetryOnGoogleAPIError5xx verifies that a real *googleapi.Error is retried on 5xx.
+func TestRetryOnGoogleAPIError5xx(t *testing.T) {
+	attempts := 0
+	op := func() error {
+		attempts++
+		if attempts < 3 {
+			return &googleapi.Error{Code: http.StatusServiceUnavailable}
+		}
+		return nil
 	}
+	if err := WithRetry(op, 5, time.Millisecond); err != nil {
+		t.Fatalf("expected success after retries, got %v", err)
+	}
+	if attempts != 3 {
+		t.Fatalf("expected 3 attempts, got %d", attempts)
+	}
+}
 
-	// Third delay should be ~4*baseDelay (80ms)
-	expectedThird := 4 * baseDelay
-	if delays[2] < expectedThird-tolerance || delays[2] > expectedThird+tolerance {
-		t.Errorf("Third delay expected ~%v, got %v", expectedThird, delays[2])
+// TestNoRetryOnGoogleAPIError4xx verifies that a *googleapi.Error 4xx is not retried.
+func TestNoRetryOnGoogleAPIError4xx(t *testing.T) {
+	attempts := 0
+	op := func() error {
+		attempts++
+		return &googleapi.Error{Code: http.StatusForbidden}
+	}
+	if err := WithRetry(op, 5, time.Millisecond); err == nil {
+		t.Fatal("expected error")
+	}
+	if attempts != 1 {
+		t.Fatalf("expected 1 attempt (no retry on 403), got %d", attempts)
+	}
+}
+
+// TestRetryAfterHeaderHonored verifies that a Retry-After header (integer seconds) is honored.
+func TestRetryAfterHeaderHonored(t *testing.T) {
+	if got := parseRetryAfter(http.Header{"Retry-After": []string{"2"}}); got != 2*time.Second {
+		t.Fatalf("expected 2s, got %v", got)
+	}
+	if got := parseRetryAfter(http.Header{"Retry-After": []string{"0"}}); got != 0 {
+		t.Fatalf("expected 0 for non-positive, got %v", got)
+	}
+	if got := parseRetryAfter(nil); got != 0 {
+		t.Fatalf("expected 0 for nil header, got %v", got)
+	}
+}
+
+// TestWithRetryCtxCancels verifies that WithRetryCtx aborts between attempts when ctx is cancelled.
+func TestWithRetryCtxCancels(t *testing.T) {
+	ctx, cancel := context.WithCancel(context.Background())
+	attempts := 0
+	op := func() error {
+		attempts++
+		if attempts == 1 {
+			cancel() // cancel during the first backoff wait
+		}
+		return &googleapi.Error{Code: http.StatusServiceUnavailable}
+	}
+	err := WithRetryCtx(ctx, op, 10, 50*time.Millisecond)
+	if err == nil {
+		t.Fatal("expected context error")
+	}
+	if attempts > 2 {
+		t.Fatalf("expected to stop early on cancel, got %d attempts", attempts)
 	}
 }
