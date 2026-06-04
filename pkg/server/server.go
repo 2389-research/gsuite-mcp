@@ -2090,7 +2090,7 @@ func (s *Server) handleAuthInit(ctx context.Context, request mcp.CallToolRequest
 	// If the account doesn't exist yet, auto-create it in the registry
 	resolvedAlias := account
 	if resolvedAlias == "" {
-		resolvedAlias = s.registry.DefaultAlias
+		resolvedAlias = s.registry.Default()
 	}
 	if _, err := s.registry.Resolve(resolvedAlias); err != nil {
 		// Validate alias before creating
@@ -2267,7 +2267,7 @@ func (s *Server) handleAccountsList(ctx context.Context, req mcp.CallToolRequest
 		}
 		accountInfos = append(accountInfos, AccountInfo{
 			Alias:         alias,
-			IsDefault:     alias == s.registry.DefaultAlias,
+			IsDefault:     alias == s.registry.Default(),
 			Authenticated: authenticated,
 		})
 	}

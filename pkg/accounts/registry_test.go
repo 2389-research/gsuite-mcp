@@ -4,6 +4,7 @@
 package accounts
 
 import (
+	"fmt"
 	"net/http"
 	"os"
 	"path/filepath"
@@ -282,4 +283,65 @@ func TestRegistry_ConcurrentAccess(t *testing.T) {
 	for i := 0; i < 10; i++ {
 		<-done
 	}
+}
+
+func TestRegistry_Default(t *testing.T) {
+	t.Run("fallback registry has default alias", func(t *testing.T) {
+		// LoadRegistry on a non-existent path returns a fallback with DefaultAlias == "default"
+		reg, err := LoadRegistry("/nonexistent/path/accounts.json")
+		require.NoError(t, err)
+		assert.Equal(t, "default", reg.Default())
+	})
+
+	t.Run("loaded registry returns configured default", func(t *testing.T) {
+		dir := t.TempDir()
+		configPath := filepath.Join(dir, "accounts.json")
+		require.NoError(t, os.WriteFile(configPath, []byte(`{
+			"default": "work",
+			"accounts": {
+				"work": {"token_path": "/tmp/work.json"}
+			}
+		}`), 0600))
+
+		reg, err := LoadRegistry(configPath)
+		require.NoError(t, err)
+		assert.Equal(t, "work", reg.Default())
+	})
+}
+
+func TestRegistry_ConcurrentAccessWithDefault(t *testing.T) {
+	// This test is designed to exercise the race detector.
+	// It concurrently calls Default(), ListAccounts(), Resolve(), and AddAccount()
+	// to give -race meaningful coverage of all registry locking paths.
+	dir := t.TempDir()
+	configPath := filepath.Join(dir, "accounts.json")
+
+	reg, err := LoadRegistry(configPath)
+	require.NoError(t, err)
+
+	const goroutines = 50
+	var wg sync.WaitGroup
+	wg.Add(goroutines)
+
+	for i := 0; i < goroutines; i++ {
+		go func(idx int) {
+			defer wg.Done()
+
+			// Readers: Default, ListAccounts, Resolve
+			_ = reg.Default()
+			_ = reg.ListAccounts()
+			_, _ = reg.Resolve("default")
+
+			// Writer: AddAccount with a unique alias per goroutine
+			alias := fmt.Sprintf("acct%d", idx)
+			// ignore save() I/O errors from concurrent disk writes — this test targets the in-memory lock paths
+			_ = reg.AddAccount(alias, "/tmp/"+alias+".json")
+
+			// More reads after the write
+			_ = reg.Default()
+			_ = reg.ListAccounts()
+		}(i)
+	}
+
+	wg.Wait()
 }

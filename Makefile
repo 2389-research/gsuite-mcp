@@ -31,7 +31,7 @@ clean:
 ## test: Run all tests
 test:
 	@echo "Running tests..."
-	$(GO) test -v ./...
+	$(GO) test -race -v ./...
 
 ## test-cover: Run tests with coverage
 test-cover:

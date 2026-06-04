@@ -143,6 +143,14 @@ func (r *Registry) GetDefault() (*Account, error) {
 	return r.Resolve("")
 }
 
+// Default returns the default account's alias, read under the registry's
+// read lock. (GetDefault returns the *Account; this returns just the alias.)
+func (r *Registry) Default() string {
+	r.mu.RLock()
+	defer r.mu.RUnlock()
+	return r.DefaultAlias
+}
+
 // ListAccounts returns all account aliases sorted alphabetically
 func (r *Registry) ListAccounts() []string {
 	r.mu.RLock()
