@@ -2253,7 +2253,6 @@ type AccountInfo struct {
 	Alias         string `json:"alias"`
 	IsDefault     bool   `json:"is_default"`
 	Authenticated bool   `json:"authenticated"`
-	TokenPath     string `json:"token_path"`
 }
 
 func (s *Server) handleAccountsList(ctx context.Context, req mcp.CallToolRequest) (*mcp.CallToolResult, error) {
@@ -2270,7 +2269,6 @@ func (s *Server) handleAccountsList(ctx context.Context, req mcp.CallToolRequest
 			Alias:         alias,
 			IsDefault:     alias == s.registry.DefaultAlias,
 			Authenticated: authenticated,
-			TokenPath:     acct.TokenPath,
 		})
 	}
 

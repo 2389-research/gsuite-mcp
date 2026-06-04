@@ -310,6 +310,44 @@ func TestServer_HandleAccountsList_ISHMode(t *testing.T) {
 	assert.False(t, result.IsError, "accounts_list should not return an error")
 }
 
+func TestHandleAccountsList_DoesNotExposeTokenPath(t *testing.T) {
+	t.Setenv("ISH_MODE", "true")
+
+	srv, err := NewServer(context.Background())
+	require.NoError(t, err)
+
+	request := createMockRequest("accounts_list", map[string]interface{}{})
+
+	result, err := srv.handleAccountsList(context.Background(), request)
+	require.NoError(t, err)
+	require.NotNil(t, result)
+	require.NotEmpty(t, result.Content)
+
+	textContent, ok := result.Content[0].(mcp.TextContent)
+	require.True(t, ok, "expected TextContent")
+
+	var parsed map[string]interface{}
+	require.NoError(t, json.Unmarshal([]byte(textContent.Text), &parsed))
+
+	accounts, ok := parsed["accounts"].([]interface{})
+	require.True(t, ok, "expected accounts to be a list")
+	require.NotEmpty(t, accounts, "expected at least one account")
+
+	for i, item := range accounts {
+		entry, ok := item.(map[string]interface{})
+		require.True(t, ok, "account entry %d should be a map", i)
+
+		_, hasTokenPath := entry["token_path"]
+		assert.False(t, hasTokenPath, "account entry %d must not contain token_path", i)
+
+		_, hasAlias := entry["alias"]
+		assert.True(t, hasAlias, "account entry %d must contain alias", i)
+
+		_, hasAuthenticated := entry["authenticated"]
+		assert.True(t, hasAuthenticated, "account entry %d must contain authenticated", i)
+	}
+}
+
 func TestServer_AuthToolsAcceptAccountParam(t *testing.T) {
 	t.Setenv("ISH_MODE", "true")
 
