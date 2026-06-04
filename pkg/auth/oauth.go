@@ -257,11 +257,10 @@ func (p *PersistentTokenSource) Token() (*oauth2.Token, error) {
 
 // TokenInfo contains metadata about the cached OAuth token
 type TokenInfo struct {
-	Valid       bool          `json:"valid"`
-	AccessToken string        `json:"access_token"` // Masked for security
-	Expiry      time.Time     `json:"expiry"`
-	ExpiresIn   time.Duration `json:"expires_in"`
-	HasRefresh  bool          `json:"has_refresh"`
+	Valid      bool          `json:"valid"`
+	Expiry     time.Time     `json:"expiry"`
+	ExpiresIn  time.Duration `json:"expires_in"`
+	HasRefresh bool          `json:"has_refresh"`
 }
 
 // TokenInfo returns metadata about the cached token without making API calls.
@@ -273,10 +272,9 @@ func (a *Authenticator) TokenInfo() (*TokenInfo, error) {
 	}
 
 	info := &TokenInfo{
-		Valid:       token.AccessToken != "" && token.Valid(),
-		AccessToken: maskToken(token.AccessToken),
-		Expiry:      token.Expiry,
-		HasRefresh:  token.RefreshToken != "",
+		Valid:      token.AccessToken != "" && token.Valid(),
+		Expiry:     token.Expiry,
+		HasRefresh: token.RefreshToken != "",
 	}
 
 	if !token.Expiry.IsZero() {
@@ -284,15 +282,6 @@ func (a *Authenticator) TokenInfo() (*TokenInfo, error) {
 	}
 
 	return info, nil
-}
-
-// maskToken returns a masked version of the token for safe display.
-// Shows first 4 and last 4 characters, e.g., "ya29...7890"
-func maskToken(token string) string {
-	if len(token) <= 8 {
-		return token
-	}
-	return token[:4] + "..." + token[len(token)-4:]
 }
 
 // AuthURL returns the OAuth authorization URL for user authentication.

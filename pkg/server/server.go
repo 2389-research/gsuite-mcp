@@ -2021,12 +2021,11 @@ func (s *Server) handleAuthStatus(ctx context.Context, request mcp.CallToolReque
 
 // AuthInfoResponse is the response for auth_info tool
 type AuthInfoResponse struct {
-	Valid       bool   `json:"valid"`
-	AccessToken string `json:"access_token,omitempty"`
-	Expiry      string `json:"expiry,omitempty"`
-	ExpiresIn   string `json:"expires_in,omitempty"`
-	HasRefresh  bool   `json:"has_refresh"`
-	Message     string `json:"message,omitempty"`
+	Valid      bool   `json:"valid"`
+	Expiry     string `json:"expiry,omitempty"`
+	ExpiresIn  string `json:"expires_in,omitempty"`
+	HasRefresh bool   `json:"has_refresh"`
+	Message    string `json:"message,omitempty"`
 }
 
 func (s *Server) handleAuthInfo(ctx context.Context, request mcp.CallToolRequest) (*mcp.CallToolResult, error) {
@@ -2058,9 +2057,8 @@ func (s *Server) handleAuthInfo(ctx context.Context, request mcp.CallToolRequest
 	}
 
 	resp := AuthInfoResponse{
-		Valid:       info.Valid,
-		AccessToken: info.AccessToken,
-		HasRefresh:  info.HasRefresh,
+		Valid:      info.Valid,
+		HasRefresh: info.HasRefresh,
 	}
 
 	if !info.Expiry.IsZero() {

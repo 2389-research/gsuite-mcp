@@ -5,6 +5,7 @@ package server
 
 import (
 	"context"
+	"encoding/json"
 	"testing"
 
 	"github.com/mark3labs/mcp-go/mcp"
@@ -328,4 +329,27 @@ func TestServer_AuthToolsAcceptAccountParam(t *testing.T) {
 		_, hasAccount := tool.InputSchema.Properties["account"]
 		assert.True(t, hasAccount, "auth tool %s should have 'account' property", name)
 	}
+}
+
+func TestHandleAuthInfo_DoesNotExposeAccessToken(t *testing.T) {
+	t.Setenv("ISH_MODE", "true")
+
+	srv, err := NewServer(context.Background())
+	require.NoError(t, err)
+
+	request := createMockRequest("auth_info", map[string]interface{}{})
+
+	result, err := srv.handleAuthInfo(context.Background(), request)
+	require.NoError(t, err)
+	require.NotNil(t, result)
+	require.NotEmpty(t, result.Content)
+
+	// Extract the text content and verify no access_token fragment is present
+	textContent, ok := result.Content[0].(mcp.TextContent)
+	require.True(t, ok, "expected TextContent")
+
+	var parsed map[string]interface{}
+	require.NoError(t, json.Unmarshal([]byte(textContent.Text), &parsed))
+	_, hasAccessToken := parsed["access_token"]
+	assert.False(t, hasAccessToken, "auth_info response must not contain access_token")
 }

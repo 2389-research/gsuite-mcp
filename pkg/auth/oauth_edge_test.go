@@ -457,38 +457,32 @@ func TestTokenInfo_WithValidToken(t *testing.T) {
 
 	assert.True(t, info.Valid)
 	assert.True(t, info.HasRefresh)
-	assert.Equal(t, "ya29...here", info.AccessToken) // Masked: first 4 + last 4
-	assert.NotContains(t, info.AccessToken, "test-access-token") // Full token hidden
 	assert.WithinDuration(t, expiry, info.Expiry, time.Second)
 	assert.True(t, info.ExpiresIn > 0)
 }
 
-func TestTokenInfo_MasksAccessToken(t *testing.T) {
+func TestTokenInfo_DoesNotExposeAccessToken(t *testing.T) {
 	tmpDir := t.TempDir()
 	tokenPath := filepath.Join(tmpDir, "token.json")
 	credPath := createValidCredentialsFile(t, tmpDir)
 
-	// Test various token formats
-	testCases := []struct {
-		token    string
-		expected string
-	}{
-		{"ya29.a0AfB_byC1234567890", "ya29...7890"},
-		{"short123", "short123"}, // 8 chars, no masking
-		{"abcdefghi", "abcd...fghi"}, // 9 chars, masked
-		{"ab", "ab"},
-	}
+	token := &oauth2.Token{AccessToken: "ya29.a0AfB_byC1234567890", Expiry: time.Now().Add(time.Hour)}
+	data, _ := json.Marshal(token)
+	require.NoError(t, os.WriteFile(tokenPath, data, 0600))
 
-	for _, tc := range testCases {
-		token := &oauth2.Token{AccessToken: tc.token, Expiry: time.Now().Add(time.Hour)}
-		data, _ := json.Marshal(token)
-		require.NoError(t, os.WriteFile(tokenPath, data, 0600))
+	auth, err := NewAuthenticator(credPath, tokenPath)
+	require.NoError(t, err)
 
-		auth, _ := NewAuthenticator(credPath, tokenPath)
-		info, err := auth.TokenInfo()
-		require.NoError(t, err)
-		assert.Equal(t, tc.expected, info.AccessToken, "masking failed for %s", tc.token)
-	}
+	info, err := auth.TokenInfo()
+	require.NoError(t, err)
+
+	// TokenInfo must not expose any token fragment (not even a masked one)
+	serialized, err := json.Marshal(info)
+	require.NoError(t, err)
+	var m map[string]interface{}
+	require.NoError(t, json.Unmarshal(serialized, &m))
+	_, exists := m["access_token"]
+	assert.False(t, exists, "TokenInfo JSON must not contain an access_token key")
 }
 
 func TestTokenInfo_NoTokenFile(t *testing.T) {
@@ -504,7 +498,6 @@ func TestTokenInfo_NoTokenFile(t *testing.T) {
 
 	assert.False(t, info.Valid)
 	assert.False(t, info.HasRefresh)
-	assert.Empty(t, info.AccessToken)
 }
 
 func TestAuthURL_ReturnsValidURL(t *testing.T) {
