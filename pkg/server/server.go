@@ -5,6 +5,7 @@ package server
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"net/http"
 	"net/url"
@@ -770,7 +771,7 @@ func (s *Server) registerTools() {
 
 	s.mcp.AddTool(mcp.Tool{
 		Name:        "auth_revoke",
-		Description: "Delete cached OAuth token, forcing re-authentication on next API call",
+		Description: "Revoke the OAuth token at Google and delete the local cached token, forcing re-authentication on the next API call. If Google cannot be reached, the local token is still removed and you will be told to revoke access at myaccount.google.com/permissions.",
 		InputSchema: mcp.ToolInputSchema{
 			Type: "object",
 			Properties: map[string]interface{}{
@@ -2244,27 +2245,41 @@ func (s *Server) handleAuthRevoke(ctx context.Context, request mcp.CallToolReque
 		})
 	}
 
-	err = authenticator.RevokeToken()
-	if err != nil {
+	// evictCachedServices removes in-memory service state for the account.
+	// Called on all success paths (full or partial revoke) because the local
+	// token is gone in both cases.
+	evictCachedServices := func() {
+		acct, resolveErr := s.registry.Resolve(account)
+		if resolveErr == nil {
+			acct.SetClient(nil)
+			s.servicesMu.Lock()
+			delete(s.services, acct.Alias)
+			s.servicesMu.Unlock()
+		}
+	}
+
+	err = authenticator.RevokeToken(ctx)
+	switch {
+	case err == nil:
+		evictCachedServices()
+		return mcp.NewToolResultJSON(AuthRevokeResponse{
+			Success: true,
+			Message: "token revoked at Google and local credentials cleared - use auth_init to start a new authentication flow",
+		})
+	case errors.Is(err, auth.ErrRemoteRevokeFailed):
+		// Local token is gone; cached services must still be evicted.
+		evictCachedServices()
+		return mcp.NewToolResultJSON(AuthRevokeResponse{
+			Success: true,
+			Message: "local credentials removed, but Google could not be reached to revoke the token - please also revoke access at https://myaccount.google.com/permissions",
+		})
+	default:
+		// Local token may still exist — do NOT evict cached services.
 		return mcp.NewToolResultJSON(AuthRevokeResponse{
 			Success: false,
 			Message: fmt.Sprintf("failed to revoke token: %v", err),
 		})
 	}
-
-	// Evict cached services for this account
-	acct, resolveErr := s.registry.Resolve(account)
-	if resolveErr == nil {
-		acct.SetClient(nil)
-		s.servicesMu.Lock()
-		delete(s.services, acct.Alias)
-		s.servicesMu.Unlock()
-	}
-
-	return mcp.NewToolResultJSON(AuthRevokeResponse{
-		Success: true,
-		Message: "token revoked - use auth_init to start new authentication flow",
-	})
 }
 
 // AccountInfo describes a single account's metadata and auth status

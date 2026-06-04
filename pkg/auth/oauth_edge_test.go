@@ -6,6 +6,9 @@ package auth
 import (
 	"context"
 	"encoding/json"
+	"io"
+	"net/http"
+	"net/http/httptest"
 	"os"
 	"path/filepath"
 	"testing"
@@ -227,6 +230,13 @@ func TestNewAuthenticator_EmptyPaths(t *testing.T) {
 }
 
 func TestRevokeToken_ExistingToken(t *testing.T) {
+	// Use a local httptest server to avoid any outbound network calls during tests.
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		_, _ = io.Copy(io.Discard, r.Body)
+		w.WriteHeader(http.StatusOK)
+	}))
+	defer srv.Close()
+
 	tmpDir := t.TempDir()
 	tokenPath := filepath.Join(tmpDir, "token.json")
 
@@ -236,11 +246,13 @@ func TestRevokeToken_ExistingToken(t *testing.T) {
 
 	credPath := createValidCredentialsFile(t, tmpDir)
 
-	auth, err := NewAuthenticator(credPath, tokenPath)
+	a, err := NewAuthenticator(credPath, tokenPath)
 	require.NoError(t, err)
+	// Redirect revoke calls to the local test server instead of Google.
+	a.revokeURL = srv.URL
 
 	// Revoke the token
-	err = auth.RevokeToken()
+	err = a.RevokeToken(context.Background())
 	assert.NoError(t, err)
 
 	// Verify token file is gone
@@ -249,16 +261,25 @@ func TestRevokeToken_ExistingToken(t *testing.T) {
 }
 
 func TestRevokeToken_NonExistentToken(t *testing.T) {
+	// Stand up a server that fails the test if called — no HTTP request must be
+	// made when there is no local token file.
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		t.Error("revoke endpoint must not be called when no token file exists")
+		w.WriteHeader(http.StatusOK)
+	}))
+	defer srv.Close()
+
 	tmpDir := t.TempDir()
 	tokenPath := filepath.Join(tmpDir, "nonexistent.json")
 
 	credPath := createValidCredentialsFile(t, tmpDir)
 
-	auth, err := NewAuthenticator(credPath, tokenPath)
+	a, err := NewAuthenticator(credPath, tokenPath)
 	require.NoError(t, err)
+	a.revokeURL = srv.URL
 
-	// Revoking non-existent token should not error
-	err = auth.RevokeToken()
+	// Revoking non-existent token should not error and must not call the server
+	err = a.RevokeToken(context.Background())
 	assert.NoError(t, err)
 }
 

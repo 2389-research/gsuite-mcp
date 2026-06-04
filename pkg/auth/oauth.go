@@ -7,8 +7,11 @@ import (
 	"bufio"
 	"context"
 	"encoding/json"
+	"errors"
 	"fmt"
+	"log"
 	"net/http"
+	"net/url"
 	"os"
 	"path/filepath"
 	"strings"
@@ -22,6 +25,14 @@ import (
 	"google.golang.org/api/people/v1"
 	"google.golang.org/api/tasks/v1"
 )
+
+// googleRevokeURL is the Google OAuth revoke endpoint.
+const googleRevokeURL = "https://oauth2.googleapis.com/revoke"
+
+// ErrRemoteRevokeFailed is returned when the local token was deleted but the
+// remote revocation call to Google could not be completed. The caller should
+// advise the user to revoke access manually at https://myaccount.google.com/permissions.
+var ErrRemoteRevokeFailed = errors.New("token deleted locally but Google revocation failed")
 
 // DefaultScopes are the OAuth scopes for full GSuite access
 var DefaultScopes = []string{
@@ -37,6 +48,7 @@ type Authenticator struct {
 	credentialsPath string
 	tokenPath       string
 	config          *oauth2.Config
+	revokeURL       string // injectable in tests; defaults to googleRevokeURL
 }
 
 // NewAuthenticator creates a new OAuth authenticator
@@ -62,6 +74,7 @@ func NewAuthenticator(credentialsPath, tokenPath string) (*Authenticator, error)
 		credentialsPath: credentialsPath,
 		tokenPath:       tokenPath,
 		config:          config,
+		revokeURL:       googleRevokeURL,
 	}, nil
 }
 
@@ -183,11 +196,72 @@ func (a *Authenticator) authenticate(ctx context.Context) (*oauth2.Token, error)
 	return token, nil
 }
 
-// RevokeToken deletes the cached token
-func (a *Authenticator) RevokeToken() error {
-	if _, err := os.Stat(a.tokenPath); err == nil {
-		return os.Remove(a.tokenPath)
+// RevokeToken revokes the cached token at Google's OAuth revoke endpoint
+// (best-effort), then deletes the local token file. If the remote revoke
+// cannot be completed the local file is still removed and ErrRemoteRevokeFailed
+// is returned so the caller can advise the user to revoke access manually.
+func (a *Authenticator) RevokeToken(ctx context.Context) error {
+	token, err := a.loadToken()
+	if err != nil {
+		if os.IsNotExist(err) {
+			return nil // nothing cached, nothing to revoke
+		}
+		return err
 	}
+
+	// Prefer the refresh token (revoking it invalidates the whole grant);
+	// fall back to the access token.
+	revokeValue := token.RefreshToken
+	if revokeValue == "" {
+		revokeValue = token.AccessToken
+	}
+
+	remoteErr := a.revokeAtGoogle(ctx, revokeValue)
+
+	// Always remove the local token, regardless of remote outcome.
+	if rmErr := os.Remove(a.tokenPath); rmErr != nil && !os.IsNotExist(rmErr) {
+		return rmErr // real local failure takes precedence
+	}
+
+	if remoteErr != nil {
+		return fmt.Errorf("%w: %v", ErrRemoteRevokeFailed, remoteErr)
+	}
+	return nil
+}
+
+// revokeAtGoogle sends a best-effort POST to Google's token revocation endpoint.
+// The token is sent in the form-encoded request body (RFC 7009), not the URL.
+// If value is empty the call is skipped. Network or non-2xx responses return
+// a non-nil error; the token value is never included in log output.
+func (a *Authenticator) revokeAtGoogle(ctx context.Context, value string) error {
+	if value == "" {
+		log.Printf("auth: skipping remote revoke — no token value available")
+		return nil
+	}
+
+	cctx, cancel := context.WithTimeout(ctx, 10*time.Second)
+	defer cancel()
+
+	body := strings.NewReader(url.Values{"token": {value}}.Encode())
+	req, err := http.NewRequestWithContext(cctx, http.MethodPost, a.revokeURL, body)
+	if err != nil {
+		return fmt.Errorf("building revoke request: %w", err)
+	}
+	req.Header.Set("Content-Type", "application/x-www-form-urlencoded")
+
+	resp, err := (&http.Client{}).Do(req)
+	if err != nil {
+		log.Printf("auth: remote revoke request failed (transport error)")
+		return fmt.Errorf("revoke request: %w", err)
+	}
+	defer resp.Body.Close()
+
+	if resp.StatusCode < 200 || resp.StatusCode > 299 {
+		log.Printf("auth: remote revoke returned non-2xx status %d", resp.StatusCode)
+		return fmt.Errorf("revoke endpoint returned status %d", resp.StatusCode)
+	}
+
+	log.Printf("auth: remote revoke succeeded (status %d)", resp.StatusCode)
 	return nil
 }
 
