@@ -802,6 +802,7 @@ Each a one-line commit; batch a few per PR.
 3. CLI polish: non-zero exit codes on error; usage/errors to **stderr**, data to **stdout**; `--help` exit 0.
 4. Audit remaining `fmt.Print*` calls outside the OAuth flow to ensure none write to stdout under the `mcp` command.
 5. Ensure every Go file has the two `// ABOUTME:` header lines (CLAUDE.md) — grep for files missing them.
+6. Migrate the ~20 service call sites from `WithRetry` to `WithRetryCtx` so the handler's request deadline (Task 2.5) also interrupts inter-attempt backoff sleeps. Pre-existing: a retrying call (e.g. 429) currently sleeps its backoff on `context.Background()`, so after the 30s deadline fires the next `.Do()` fails fast but an in-flight sleep is not cut short. The single-`.Do()` hang Task 2.5 targets is already bounded; this tightens the retry path. (Surfaced by Task 2.5 code-quality review.)
 
 ---
 
