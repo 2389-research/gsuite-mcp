@@ -33,6 +33,24 @@ import (
 // without setting it first reports this "dev" default.
 var Version = "dev"
 
+// requestTimeout bounds how long a single tool handler may spend on outbound
+// Google API calls before its context is cancelled.
+const requestTimeout = 30 * time.Second
+
+// withRequestTimeout returns tool-handler middleware that bounds each handler's
+// context with a deadline, so a stuck upstream call cannot hang the handler
+// indefinitely. Handlers already thread ctx into the Google SDK calls, so the
+// deadline propagates to the outbound request.
+func withRequestTimeout(timeout time.Duration) server.ToolHandlerMiddleware {
+	return func(next server.ToolHandlerFunc) server.ToolHandlerFunc {
+		return func(ctx context.Context, request mcp.CallToolRequest) (*mcp.CallToolResult, error) {
+			ctx, cancel := context.WithTimeout(ctx, timeout)
+			defer cancel()
+			return next(ctx, request)
+		}
+	}
+}
+
 // AccountServices holds all Google service instances for a single account
 type AccountServices struct {
 	Gmail    *gmail.Service
@@ -124,6 +142,7 @@ func NewServer(ctx context.Context) (*Server, error) {
 		"gsuite-mcp",
 		Version,
 		server.WithRecovery(),
+		server.WithToolHandlerMiddleware(withRequestTimeout(requestTimeout)),
 	)
 
 	s.mcp = mcpServer
