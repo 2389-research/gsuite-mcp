@@ -837,7 +837,7 @@ func (s *Server) handleGmailListMessages(ctx context.Context, request mcp.CallTo
 	account := request.GetString("account", "")
 	svc, err := s.resolveServices(ctx, account)
 	if err != nil {
-		return mcp.NewToolResultError(err.Error()), nil
+		return toolError(err), nil
 	}
 
 	query := request.GetString("query", "")
@@ -846,7 +846,7 @@ func (s *Server) handleGmailListMessages(ctx context.Context, request mcp.CallTo
 
 	messages, err := svc.Gmail.ListMessages(ctx, query, maxResults)
 	if err != nil {
-		return mcp.NewToolResultError(err.Error()), nil
+		return toolError(err), nil
 	}
 
 	if !hydrate {
@@ -913,17 +913,17 @@ func (s *Server) handleGmailGetMessage(ctx context.Context, request mcp.CallTool
 	account := request.GetString("account", "")
 	svc, err := s.resolveServices(ctx, account)
 	if err != nil {
-		return mcp.NewToolResultError(err.Error()), nil
+		return toolError(err), nil
 	}
 
 	messageID, err := request.RequireString("message_id")
 	if err != nil {
-		return mcp.NewToolResultError(err.Error()), nil
+		return toolError(err), nil
 	}
 
 	msg, err := svc.Gmail.GetMessage(ctx, messageID)
 	if err != nil {
-		return mcp.NewToolResultError(err.Error()), nil
+		return toolError(err), nil
 	}
 
 	return mcp.NewToolResultJSON(msg)
@@ -933,22 +933,22 @@ func (s *Server) handleGmailSendMessage(ctx context.Context, request mcp.CallToo
 	account := request.GetString("account", "")
 	svc, err := s.resolveServices(ctx, account)
 	if err != nil {
-		return mcp.NewToolResultError(err.Error()), nil
+		return toolError(err), nil
 	}
 
 	to, err := request.RequireString("to")
 	if err != nil {
-		return mcp.NewToolResultError(err.Error()), nil
+		return toolError(err), nil
 	}
 
 	subject, err := request.RequireString("subject")
 	if err != nil {
-		return mcp.NewToolResultError(err.Error()), nil
+		return toolError(err), nil
 	}
 
 	body, err := request.RequireString("body")
 	if err != nil {
-		return mcp.NewToolResultError(err.Error()), nil
+		return toolError(err), nil
 	}
 
 	inReplyTo := request.GetString("in_reply_to", "")
@@ -957,7 +957,7 @@ func (s *Server) handleGmailSendMessage(ctx context.Context, request mcp.CallToo
 
 	msg, err := svc.Gmail.SendMessage(ctx, to, subject, body, inReplyTo, cc, bcc)
 	if err != nil {
-		return mcp.NewToolResultError(err.Error()), nil
+		return toolError(err), nil
 	}
 
 	return mcp.NewToolResultJSON(msg)
@@ -967,22 +967,22 @@ func (s *Server) handleGmailCreateDraft(ctx context.Context, request mcp.CallToo
 	account := request.GetString("account", "")
 	svc, err := s.resolveServices(ctx, account)
 	if err != nil {
-		return mcp.NewToolResultError(err.Error()), nil
+		return toolError(err), nil
 	}
 
 	to, err := request.RequireString("to")
 	if err != nil {
-		return mcp.NewToolResultError(err.Error()), nil
+		return toolError(err), nil
 	}
 
 	subject, err := request.RequireString("subject")
 	if err != nil {
-		return mcp.NewToolResultError(err.Error()), nil
+		return toolError(err), nil
 	}
 
 	body, err := request.RequireString("body")
 	if err != nil {
-		return mcp.NewToolResultError(err.Error()), nil
+		return toolError(err), nil
 	}
 
 	inReplyTo := request.GetString("in_reply_to", "")
@@ -991,7 +991,7 @@ func (s *Server) handleGmailCreateDraft(ctx context.Context, request mcp.CallToo
 
 	draft, err := svc.Gmail.CreateDraft(ctx, to, subject, body, inReplyTo, cc, bcc)
 	if err != nil {
-		return mcp.NewToolResultError(err.Error()), nil
+		return toolError(err), nil
 	}
 
 	return mcp.NewToolResultJSON(draft)
@@ -1001,17 +1001,17 @@ func (s *Server) handleGmailSendDraft(ctx context.Context, request mcp.CallToolR
 	account := request.GetString("account", "")
 	svc, err := s.resolveServices(ctx, account)
 	if err != nil {
-		return mcp.NewToolResultError(err.Error()), nil
+		return toolError(err), nil
 	}
 
 	draftID, err := request.RequireString("draft_id")
 	if err != nil {
-		return mcp.NewToolResultError(err.Error()), nil
+		return toolError(err), nil
 	}
 
 	msg, err := svc.Gmail.SendDraft(ctx, draftID)
 	if err != nil {
-		return mcp.NewToolResultError(err.Error()), nil
+		return toolError(err), nil
 	}
 
 	return mcp.NewToolResultJSON(msg)
@@ -1021,12 +1021,12 @@ func (s *Server) handleGmailModifyLabels(ctx context.Context, request mcp.CallTo
 	account := request.GetString("account", "")
 	svc, err := s.resolveServices(ctx, account)
 	if err != nil {
-		return mcp.NewToolResultError(err.Error()), nil
+		return toolError(err), nil
 	}
 
 	messageID, err := request.RequireString("message_id")
 	if err != nil {
-		return mcp.NewToolResultError(err.Error()), nil
+		return toolError(err), nil
 	}
 
 	// Get array parameters - these come as []interface{} from MCP
@@ -1063,7 +1063,7 @@ func (s *Server) handleGmailModifyLabels(ctx context.Context, request mcp.CallTo
 
 	modified, err := svc.Gmail.ModifyLabels(ctx, messageID, addLabels, removeLabels)
 	if err != nil {
-		return mcp.NewToolResultError(err.Error()), nil
+		return toolError(err), nil
 	}
 
 	return mcp.NewToolResultJSON(modified)
@@ -1073,17 +1073,17 @@ func (s *Server) handleGmailTrashMessage(ctx context.Context, request mcp.CallTo
 	account := request.GetString("account", "")
 	svc, err := s.resolveServices(ctx, account)
 	if err != nil {
-		return mcp.NewToolResultError(err.Error()), nil
+		return toolError(err), nil
 	}
 
 	messageID, err := request.RequireString("message_id")
 	if err != nil {
-		return mcp.NewToolResultError(err.Error()), nil
+		return toolError(err), nil
 	}
 
 	trashed, err := svc.Gmail.TrashMessage(ctx, messageID)
 	if err != nil {
-		return mcp.NewToolResultError(err.Error()), nil
+		return toolError(err), nil
 	}
 
 	return mcp.NewToolResultJSON(trashed)
@@ -1093,17 +1093,17 @@ func (s *Server) handleGmailDeleteMessage(ctx context.Context, request mcp.CallT
 	account := request.GetString("account", "")
 	svc, err := s.resolveServices(ctx, account)
 	if err != nil {
-		return mcp.NewToolResultError(err.Error()), nil
+		return toolError(err), nil
 	}
 
 	messageID, err := request.RequireString("message_id")
 	if err != nil {
-		return mcp.NewToolResultError(err.Error()), nil
+		return toolError(err), nil
 	}
 
 	err = svc.Gmail.DeleteMessage(ctx, messageID)
 	if err != nil {
-		return mcp.NewToolResultError(err.Error()), nil
+		return toolError(err), nil
 	}
 
 	return mcp.NewToolResultText(fmt.Sprintf("Message %s deleted successfully", messageID)), nil
@@ -1129,7 +1129,7 @@ func (s *Server) handleGmailManageLabels(ctx context.Context, request mcp.CallTo
 	account := request.GetString("account", "")
 	svc, err := s.resolveServices(ctx, account)
 	if err != nil {
-		return mcp.NewToolResultError(err.Error()), nil
+		return toolError(err), nil
 	}
 
 	action, err := request.RequireString("action")
@@ -1141,7 +1141,7 @@ func (s *Server) handleGmailManageLabels(ctx context.Context, request mcp.CallTo
 	case "list":
 		labels, err := svc.Gmail.ListLabels(ctx)
 		if err != nil {
-			return mcp.NewToolResultError(err.Error()), nil
+			return toolError(err), nil
 		}
 
 		summaries := make([]LabelSummary, len(labels))
@@ -1167,7 +1167,7 @@ func (s *Server) handleGmailManageLabels(ctx context.Context, request mcp.CallTo
 
 		label, err := svc.Gmail.GetLabel(ctx, labelID)
 		if err != nil {
-			return mcp.NewToolResultError(fmt.Sprintf("label not found: %v. Use action: list to see available labels.", err)), nil
+			return toolError(err), nil
 		}
 
 		return mcp.NewToolResultJSON(ManageLabelsResponse{
@@ -1190,7 +1190,7 @@ func (s *Server) handleGmailManageLabels(ctx context.Context, request mcp.CallTo
 
 		label, err := svc.Gmail.CreateLabel(ctx, name, labelListVisibility, messageListVisibility)
 		if err != nil {
-			return mcp.NewToolResultError(fmt.Sprintf("failed to create label: %v", err)), nil
+			return toolError(err), nil
 		}
 
 		return mcp.NewToolResultJSON(ManageLabelsResponse{
@@ -1218,7 +1218,7 @@ func (s *Server) handleGmailManageLabels(ctx context.Context, request mcp.CallTo
 			if strings.Contains(err.Error(), "systemLabelCannotBeUpdated") {
 				return mcp.NewToolResultError("system labels (INBOX, SENT, etc.) cannot be updated. Only user-created labels can be modified."), nil
 			}
-			return mcp.NewToolResultError(fmt.Sprintf("failed to update label: %v", err)), nil
+			return toolError(err), nil
 		}
 
 		return mcp.NewToolResultJSON(ManageLabelsResponse{
@@ -1238,7 +1238,7 @@ func (s *Server) handleGmailManageLabels(ctx context.Context, request mcp.CallTo
 			if strings.Contains(err.Error(), "systemLabelCannotBeDeleted") {
 				return mcp.NewToolResultError("system labels (INBOX, SENT, etc.) cannot be deleted. Only user-created labels can be deleted."), nil
 			}
-			return mcp.NewToolResultError(fmt.Sprintf("failed to delete label: %v", err)), nil
+			return toolError(err), nil
 		}
 
 		return mcp.NewToolResultJSON(ManageLabelsResponse{
@@ -1255,7 +1255,7 @@ func (s *Server) handleCalendarListEvents(ctx context.Context, request mcp.CallT
 	account := request.GetString("account", "")
 	svc, err := s.resolveServices(ctx, account)
 	if err != nil {
-		return mcp.NewToolResultError(err.Error()), nil
+		return toolError(err), nil
 	}
 
 	maxResults := int64(request.GetInt("max_results", 100))
@@ -1279,7 +1279,7 @@ func (s *Server) handleCalendarListEvents(ctx context.Context, request mcp.CallT
 
 	events, err := svc.Calendar.ListEvents(ctx, maxResults, timeMin, timeMax)
 	if err != nil {
-		return mcp.NewToolResultError(err.Error()), nil
+		return toolError(err), nil
 	}
 
 	return mcp.NewToolResultJSON(ListEventsResponse{
@@ -1292,17 +1292,17 @@ func (s *Server) handleCalendarGetEvent(ctx context.Context, request mcp.CallToo
 	account := request.GetString("account", "")
 	svc, err := s.resolveServices(ctx, account)
 	if err != nil {
-		return mcp.NewToolResultError(err.Error()), nil
+		return toolError(err), nil
 	}
 
 	eventID, err := request.RequireString("event_id")
 	if err != nil {
-		return mcp.NewToolResultError(err.Error()), nil
+		return toolError(err), nil
 	}
 
 	event, err := svc.Calendar.GetEvent(ctx, eventID)
 	if err != nil {
-		return mcp.NewToolResultError(err.Error()), nil
+		return toolError(err), nil
 	}
 
 	return mcp.NewToolResultJSON(event)
@@ -1312,24 +1312,24 @@ func (s *Server) handleCalendarCreateEvent(ctx context.Context, request mcp.Call
 	account := request.GetString("account", "")
 	svc, err := s.resolveServices(ctx, account)
 	if err != nil {
-		return mcp.NewToolResultError(err.Error()), nil
+		return toolError(err), nil
 	}
 
 	summary, err := request.RequireString("summary")
 	if err != nil {
-		return mcp.NewToolResultError(err.Error()), nil
+		return toolError(err), nil
 	}
 
 	description := request.GetString("description", "")
 
 	startTimeStr, err := request.RequireString("start_time")
 	if err != nil {
-		return mcp.NewToolResultError(err.Error()), nil
+		return toolError(err), nil
 	}
 
 	endTimeStr, err := request.RequireString("end_time")
 	if err != nil {
-		return mcp.NewToolResultError(err.Error()), nil
+		return toolError(err), nil
 	}
 
 	startTime, err := time.Parse(time.RFC3339, startTimeStr)
@@ -1349,7 +1349,7 @@ func (s *Server) handleCalendarCreateEvent(ctx context.Context, request mcp.Call
 
 	event, err := svc.Calendar.CreateEvent(ctx, summary, description, startTime, endTime, attendees, optionalAttendees, sendNotifications)
 	if err != nil {
-		return mcp.NewToolResultError(err.Error()), nil
+		return toolError(err), nil
 	}
 
 	return mcp.NewToolResultJSON(event)
@@ -1359,12 +1359,12 @@ func (s *Server) handleCalendarUpdateEvent(ctx context.Context, request mcp.Call
 	account := request.GetString("account", "")
 	svc, err := s.resolveServices(ctx, account)
 	if err != nil {
-		return mcp.NewToolResultError(err.Error()), nil
+		return toolError(err), nil
 	}
 
 	eventID, err := request.RequireString("event_id")
 	if err != nil {
-		return mcp.NewToolResultError(err.Error()), nil
+		return toolError(err), nil
 	}
 
 	// Validate attendee parameters before fetching event
@@ -1386,7 +1386,7 @@ func (s *Server) handleCalendarUpdateEvent(ctx context.Context, request mcp.Call
 	// Get existing event
 	event, err := svc.Calendar.GetEvent(ctx, eventID)
 	if err != nil {
-		return mcp.NewToolResultError(err.Error()), nil
+		return toolError(err), nil
 	}
 
 	// Update fields if provided
@@ -1521,7 +1521,7 @@ func (s *Server) handleCalendarUpdateEvent(ctx context.Context, request mcp.Call
 
 	updated, err := svc.Calendar.UpdateEvent(ctx, eventID, event, sendNotifications)
 	if err != nil {
-		return mcp.NewToolResultError(err.Error()), nil
+		return toolError(err), nil
 	}
 
 	return mcp.NewToolResultJSON(updated)
@@ -1531,17 +1531,17 @@ func (s *Server) handleCalendarDeleteEvent(ctx context.Context, request mcp.Call
 	account := request.GetString("account", "")
 	svc, err := s.resolveServices(ctx, account)
 	if err != nil {
-		return mcp.NewToolResultError(err.Error()), nil
+		return toolError(err), nil
 	}
 
 	eventID, err := request.RequireString("event_id")
 	if err != nil {
-		return mcp.NewToolResultError(err.Error()), nil
+		return toolError(err), nil
 	}
 
 	err = svc.Calendar.DeleteEvent(ctx, eventID)
 	if err != nil {
-		return mcp.NewToolResultError(err.Error()), nil
+		return toolError(err), nil
 	}
 
 	return mcp.NewToolResultText(fmt.Sprintf("Event %s deleted successfully", eventID)), nil
@@ -1551,14 +1551,14 @@ func (s *Server) handlePeopleListContacts(ctx context.Context, request mcp.CallT
 	account := request.GetString("account", "")
 	svc, err := s.resolveServices(ctx, account)
 	if err != nil {
-		return mcp.NewToolResultError(err.Error()), nil
+		return toolError(err), nil
 	}
 
 	pageSize := int64(request.GetInt("page_size", 100))
 
 	contacts, err := svc.People.ListContacts(ctx, pageSize)
 	if err != nil {
-		return mcp.NewToolResultError(err.Error()), nil
+		return toolError(err), nil
 	}
 
 	return mcp.NewToolResultJSON(ListContactsResponse{
@@ -1571,19 +1571,19 @@ func (s *Server) handlePeopleSearchContacts(ctx context.Context, request mcp.Cal
 	account := request.GetString("account", "")
 	svc, err := s.resolveServices(ctx, account)
 	if err != nil {
-		return mcp.NewToolResultError(err.Error()), nil
+		return toolError(err), nil
 	}
 
 	query, err := request.RequireString("query")
 	if err != nil {
-		return mcp.NewToolResultError(err.Error()), nil
+		return toolError(err), nil
 	}
 
 	pageSize := int64(request.GetInt("page_size", 10))
 
 	contacts, err := svc.People.SearchContacts(ctx, query, pageSize)
 	if err != nil {
-		return mcp.NewToolResultError(err.Error()), nil
+		return toolError(err), nil
 	}
 
 	return mcp.NewToolResultJSON(ListContactsResponse{
@@ -1596,17 +1596,17 @@ func (s *Server) handlePeopleGetContact(ctx context.Context, request mcp.CallToo
 	account := request.GetString("account", "")
 	svc, err := s.resolveServices(ctx, account)
 	if err != nil {
-		return mcp.NewToolResultError(err.Error()), nil
+		return toolError(err), nil
 	}
 
 	resourceName, err := request.RequireString("resource_name")
 	if err != nil {
-		return mcp.NewToolResultError(err.Error()), nil
+		return toolError(err), nil
 	}
 
 	person, err := svc.People.GetPerson(ctx, resourceName)
 	if err != nil {
-		return mcp.NewToolResultError(err.Error()), nil
+		return toolError(err), nil
 	}
 
 	return mcp.NewToolResultJSON(person)
@@ -1616,12 +1616,12 @@ func (s *Server) handlePeopleCreateContact(ctx context.Context, request mcp.Call
 	account := request.GetString("account", "")
 	svc, err := s.resolveServices(ctx, account)
 	if err != nil {
-		return mcp.NewToolResultError(err.Error()), nil
+		return toolError(err), nil
 	}
 
 	givenName, err := request.RequireString("given_name")
 	if err != nil {
-		return mcp.NewToolResultError(err.Error()), nil
+		return toolError(err), nil
 	}
 
 	familyName := request.GetString("family_name", "")
@@ -1652,7 +1652,7 @@ func (s *Server) handlePeopleCreateContact(ctx context.Context, request mcp.Call
 
 	created, err := svc.People.CreateContact(ctx, person)
 	if err != nil {
-		return mcp.NewToolResultError(err.Error()), nil
+		return toolError(err), nil
 	}
 
 	return mcp.NewToolResultJSON(created)
@@ -1662,18 +1662,18 @@ func (s *Server) handlePeopleUpdateContact(ctx context.Context, request mcp.Call
 	account := request.GetString("account", "")
 	svc, err := s.resolveServices(ctx, account)
 	if err != nil {
-		return mcp.NewToolResultError(err.Error()), nil
+		return toolError(err), nil
 	}
 
 	resourceName, err := request.RequireString("resource_name")
 	if err != nil {
-		return mcp.NewToolResultError(err.Error()), nil
+		return toolError(err), nil
 	}
 
 	// Get existing contact first
 	person, err := svc.People.GetPerson(ctx, resourceName)
 	if err != nil {
-		return mcp.NewToolResultError(err.Error()), nil
+		return toolError(err), nil
 	}
 
 	var updateFields []string
@@ -1725,7 +1725,7 @@ func (s *Server) handlePeopleUpdateContact(ctx context.Context, request mcp.Call
 
 	updated, err := svc.People.UpdateContact(ctx, resourceName, person, updateMask)
 	if err != nil {
-		return mcp.NewToolResultError(err.Error()), nil
+		return toolError(err), nil
 	}
 
 	return mcp.NewToolResultJSON(updated)
@@ -1735,17 +1735,17 @@ func (s *Server) handlePeopleDeleteContact(ctx context.Context, request mcp.Call
 	account := request.GetString("account", "")
 	svc, err := s.resolveServices(ctx, account)
 	if err != nil {
-		return mcp.NewToolResultError(err.Error()), nil
+		return toolError(err), nil
 	}
 
 	resourceName, err := request.RequireString("resource_name")
 	if err != nil {
-		return mcp.NewToolResultError(err.Error()), nil
+		return toolError(err), nil
 	}
 
 	err = svc.People.DeleteContact(ctx, resourceName)
 	if err != nil {
-		return mcp.NewToolResultError(err.Error()), nil
+		return toolError(err), nil
 	}
 
 	return mcp.NewToolResultText(fmt.Sprintf("Contact %s deleted successfully", resourceName)), nil
@@ -1757,12 +1757,12 @@ func (s *Server) handleTasksListTaskLists(ctx context.Context, request mcp.CallT
 	account := request.GetString("account", "")
 	svc, err := s.resolveServices(ctx, account)
 	if err != nil {
-		return mcp.NewToolResultError(err.Error()), nil
+		return toolError(err), nil
 	}
 
 	taskLists, err := svc.Tasks.ListTaskLists(ctx)
 	if err != nil {
-		return mcp.NewToolResultError(err.Error()), nil
+		return toolError(err), nil
 	}
 
 	return mcp.NewToolResultJSON(ListTaskListsResponse{
@@ -1775,17 +1775,17 @@ func (s *Server) handleTasksCreateTaskList(ctx context.Context, request mcp.Call
 	account := request.GetString("account", "")
 	svc, err := s.resolveServices(ctx, account)
 	if err != nil {
-		return mcp.NewToolResultError(err.Error()), nil
+		return toolError(err), nil
 	}
 
 	title, err := request.RequireString("title")
 	if err != nil {
-		return mcp.NewToolResultError(err.Error()), nil
+		return toolError(err), nil
 	}
 
 	taskList, err := svc.Tasks.CreateTaskList(ctx, title)
 	if err != nil {
-		return mcp.NewToolResultError(err.Error()), nil
+		return toolError(err), nil
 	}
 
 	return mcp.NewToolResultJSON(taskList)
@@ -1795,22 +1795,22 @@ func (s *Server) handleTasksUpdateTaskList(ctx context.Context, request mcp.Call
 	account := request.GetString("account", "")
 	svc, err := s.resolveServices(ctx, account)
 	if err != nil {
-		return mcp.NewToolResultError(err.Error()), nil
+		return toolError(err), nil
 	}
 
 	tasklistID, err := request.RequireString("tasklist_id")
 	if err != nil {
-		return mcp.NewToolResultError(err.Error()), nil
+		return toolError(err), nil
 	}
 
 	title, err := request.RequireString("title")
 	if err != nil {
-		return mcp.NewToolResultError(err.Error()), nil
+		return toolError(err), nil
 	}
 
 	taskList, err := svc.Tasks.UpdateTaskList(ctx, tasklistID, title)
 	if err != nil {
-		return mcp.NewToolResultError(err.Error()), nil
+		return toolError(err), nil
 	}
 
 	return mcp.NewToolResultJSON(taskList)
@@ -1820,17 +1820,17 @@ func (s *Server) handleTasksDeleteTaskList(ctx context.Context, request mcp.Call
 	account := request.GetString("account", "")
 	svc, err := s.resolveServices(ctx, account)
 	if err != nil {
-		return mcp.NewToolResultError(err.Error()), nil
+		return toolError(err), nil
 	}
 
 	tasklistID, err := request.RequireString("tasklist_id")
 	if err != nil {
-		return mcp.NewToolResultError(err.Error()), nil
+		return toolError(err), nil
 	}
 
 	err = svc.Tasks.DeleteTaskList(ctx, tasklistID)
 	if err != nil {
-		return mcp.NewToolResultError(err.Error()), nil
+		return toolError(err), nil
 	}
 
 	return mcp.NewToolResultJSON(map[string]string{
@@ -1843,7 +1843,7 @@ func (s *Server) handleTasksListTasks(ctx context.Context, request mcp.CallToolR
 	account := request.GetString("account", "")
 	svc, err := s.resolveServices(ctx, account)
 	if err != nil {
-		return mcp.NewToolResultError(err.Error()), nil
+		return toolError(err), nil
 	}
 
 	tasklistID := request.GetString("tasklist_id", "@default")
@@ -1854,7 +1854,7 @@ func (s *Server) handleTasksListTasks(ctx context.Context, request mcp.CallToolR
 
 	tasks, err := svc.Tasks.ListTasks(ctx, tasklistID, showCompleted, showHidden, dueMin, dueMax)
 	if err != nil {
-		return mcp.NewToolResultError(err.Error()), nil
+		return toolError(err), nil
 	}
 
 	return mcp.NewToolResultJSON(ListTasksResponse{
@@ -1867,12 +1867,12 @@ func (s *Server) handleTasksCreateTask(ctx context.Context, request mcp.CallTool
 	account := request.GetString("account", "")
 	svc, err := s.resolveServices(ctx, account)
 	if err != nil {
-		return mcp.NewToolResultError(err.Error()), nil
+		return toolError(err), nil
 	}
 
 	title, err := request.RequireString("title")
 	if err != nil {
-		return mcp.NewToolResultError(err.Error()), nil
+		return toolError(err), nil
 	}
 
 	tasklistID := request.GetString("tasklist_id", "@default")
@@ -1892,7 +1892,7 @@ func (s *Server) handleTasksCreateTask(ctx context.Context, request mcp.CallTool
 
 	created, err := svc.Tasks.CreateTask(ctx, tasklistID, task, parent)
 	if err != nil {
-		return mcp.NewToolResultError(err.Error()), nil
+		return toolError(err), nil
 	}
 
 	return mcp.NewToolResultJSON(created)
@@ -1902,12 +1902,12 @@ func (s *Server) handleTasksUpdateTask(ctx context.Context, request mcp.CallTool
 	account := request.GetString("account", "")
 	svc, err := s.resolveServices(ctx, account)
 	if err != nil {
-		return mcp.NewToolResultError(err.Error()), nil
+		return toolError(err), nil
 	}
 
 	taskID, err := request.RequireString("task_id")
 	if err != nil {
-		return mcp.NewToolResultError(err.Error()), nil
+		return toolError(err), nil
 	}
 
 	tasklistID := request.GetString("tasklist_id", "@default")
@@ -1932,7 +1932,7 @@ func (s *Server) handleTasksUpdateTask(ctx context.Context, request mcp.CallTool
 
 	updated, err := svc.Tasks.UpdateTask(ctx, tasklistID, taskID, task)
 	if err != nil {
-		return mcp.NewToolResultError(err.Error()), nil
+		return toolError(err), nil
 	}
 
 	return mcp.NewToolResultJSON(updated)
@@ -1942,19 +1942,19 @@ func (s *Server) handleTasksDeleteTask(ctx context.Context, request mcp.CallTool
 	account := request.GetString("account", "")
 	svc, err := s.resolveServices(ctx, account)
 	if err != nil {
-		return mcp.NewToolResultError(err.Error()), nil
+		return toolError(err), nil
 	}
 
 	taskID, err := request.RequireString("task_id")
 	if err != nil {
-		return mcp.NewToolResultError(err.Error()), nil
+		return toolError(err), nil
 	}
 
 	tasklistID := request.GetString("tasklist_id", "@default")
 
 	err = svc.Tasks.DeleteTask(ctx, tasklistID, taskID)
 	if err != nil {
-		return mcp.NewToolResultError(err.Error()), nil
+		return toolError(err), nil
 	}
 
 	return mcp.NewToolResultJSON(map[string]string{
@@ -2186,7 +2186,7 @@ func (s *Server) handleAuthComplete(ctx context.Context, request mcp.CallToolReq
 
 	codeOrURL, err := request.RequireString("code")
 	if err != nil {
-		return mcp.NewToolResultError(err.Error()), nil
+		return toolError(err), nil
 	}
 
 	// Extract code from URL if user provided the full redirect URL

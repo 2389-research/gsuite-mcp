@@ -217,8 +217,10 @@ func TestHandleGmailManageLabels_GetAction(t *testing.T) {
 		require.NoError(t, err)
 		assert.True(t, result.IsError)
 
+		// The error is a 404 from the Google API; toolError sanitizes it to a
+		// safe message containing the status code but not the raw server body.
 		if textContent, ok := result.Content[0].(mcp.TextContent); ok {
-			assert.Contains(t, textContent.Text, "action: list")
+			assert.Contains(t, textContent.Text, "404")
 		}
 	})
 }
@@ -504,4 +506,47 @@ func TestHandleGmailManageLabels_HelpfulErrorMessages(t *testing.T) {
 			}
 		})
 	}
+}
+
+// TestHandleGmailManageLabels_GoogleAPIError_BodyNotLeaked is a handler-boundary
+// regression test exercising one representative label call-site (the get action).
+// It pins that a *googleapi.Error's server detail never reaches the tool result;
+// the helper-level tests in errors_test.go cover the sanitization shared by all
+// four label call-sites.
+func TestHandleGmailManageLabels_GoogleAPIError_BodyNotLeaked(t *testing.T) {
+	const sentinel = "supersecret-internal-detail"
+
+	// Stand up a httptest server that returns HTTP 403 with the sentinel in the
+	// body for any request — this simulates an upstream Google API error whose
+	// Body field contains internal/sensitive information.
+	upstream := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		w.Header().Set("Content-Type", "application/json")
+		w.WriteHeader(http.StatusForbidden)
+		_, _ = w.Write([]byte(`{"error":{"code":403,"message":"` + sentinel + `","status":"PERMISSION_DENIED"}}`))
+	}))
+	defer upstream.Close()
+
+	t.Setenv("ISH_MODE", "true")
+	t.Setenv("ISH_BASE_URL", upstream.URL)
+
+	srv, err := NewServer(context.Background())
+	require.NoError(t, err)
+
+	request := createMockRequest("gmail_manage_labels", map[string]interface{}{
+		"action":   "get",
+		"label_id": "Label_123",
+	})
+
+	result, resultErr := srv.handleGmailManageLabels(context.Background(), request)
+
+	require.NoError(t, resultErr, "handler must not return a Go error")
+	require.NotNil(t, result)
+	assert.True(t, result.IsError, "result must be marked as an error")
+
+	require.NotEmpty(t, result.Content)
+	tc, ok := result.Content[0].(mcp.TextContent)
+	require.True(t, ok, "first content must be TextContent")
+
+	assert.NotContains(t, tc.Text, sentinel, "Google API error Body must not appear in the tool result")
+	assert.Contains(t, tc.Text, "403", "safe HTTP code must appear in the tool result")
 }
