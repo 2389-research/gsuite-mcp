@@ -123,6 +123,7 @@ func NewServer(ctx context.Context) (*Server, error) {
 	mcpServer := server.NewMCPServer(
 		"gsuite-mcp",
 		Version,
+		server.WithRecovery(),
 	)
 
 	s.mcp = mcpServer
