@@ -833,3 +833,15 @@ Each a one-line commit; batch a few per PR.
 - **TDD:** Phase 1–2 tasks are RED→GREEN with named tests and expected failure reasons.
 - **Independence:** Phases 3–7 are separable into their own PRs/plans.
 - **Open items for Doctor Biz:** rotate client secret + revoke refresh token (Phase 0); confirm whether to fully unexport registry fields (Task 2.4 note); confirm coverage floor (Phase 6.4).
+
+## Execution status
+
+- **Phase 1 (CRITICAL) shipped** — `fddd763`..`5f35538`, rebase-merged to `main`.
+- **Phase 2 (IMPORTANT) shipped** — all 7 tasks (`ecbfcd7`..`fa06bb5`) landed on **local `main`** via fast-forward (not pushed). Each task: independent controller verification + mutation testing + spec-compliance review + code-quality review; repo green under `-race` between every task. Capstone branch review: READY TO MERGE.
+- During Task 2.7 the OAuth token was being sent in the URL **query string**; hardened to send it in the form-encoded request **body** (RFC 7009) at `fa06bb5` — closes a token-leak vector via `*url.Error` strings and Google-side access logs. See `gotchas.md`.
+
+### Follow-ups surfaced by the Phase 2 capstone review (not yet done)
+
+1. **(I-2) `handleAuthStatus` returns raw `googleapi.Error` in its JSON body.** Same sanitization category as Task 2.6 but a different handler — was out of 2.6's scope. Apply `sanitizeUpstreamError` (or equivalent) to the auth-status path. Pre-existing on `main`.
+2. **(M-2) `make test-cover` lacks `-race`.** The `test-cover` target runs without the race detector; add `-race` so coverage runs match the rest of the suite.
+3. **(M-1) `WithRetry` → `WithRetryCtx` migration** — already tracked as **Phase 7 item 6** above (backoff sleeps ignore the request deadline). No new entry needed.
