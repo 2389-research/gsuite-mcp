@@ -18,7 +18,7 @@ Set environment variables before starting the server (or running tests):
 ```bash
 export ISH_MODE=true
 export ISH_BASE_URL=http://localhost:9000
-export ISH_USER=testuser
+export ISH_USER=testuser@example.com
 ./gsuite-mcp mcp
 ```
 
@@ -33,7 +33,7 @@ Or in an MCP client config:
       "env": {
         "ISH_MODE": "true",
         "ISH_BASE_URL": "http://localhost:9000",
-        "ISH_USER": "testuser"
+        "ISH_USER": "testuser@example.com"
       }
     }
   }
@@ -83,8 +83,8 @@ go test ./...
 
 Unit tests set `ISH_MODE` themselves and verify the wiring (that clients are built and
 point at the mock); they do not need `credentials.json`. Integration tests that require a
-live mock server are marked `t.Skip("TODO: Implement with ish server")` and are skipped
-unless one is available.
+live mock server call `t.Skip` when no mock server is reachable, so they are skipped
+unless one is running.
 
 ## Where it lives
 

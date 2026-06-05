@@ -126,7 +126,7 @@ Create a `.env` file or set these environment variables:
 ```bash
 export ISH_MODE=true
 export ISH_BASE_URL=http://localhost:9000
-export ISH_USER=testuser
+export ISH_USER=testuser@example.com
 ```
 
 Parameters:
@@ -197,7 +197,7 @@ For ish mode testing:
       "env": {
         "ISH_MODE": "true",
         "ISH_BASE_URL": "http://localhost:9000",
-        "ISH_USER": "testuser"
+        "ISH_USER": "testuser@example.com"
       }
     }
   }

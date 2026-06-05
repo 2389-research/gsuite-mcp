@@ -126,7 +126,7 @@ gsuite-mcp help                    # Show help
 
 See [docs/](docs/) for detailed guides:
 
-- [Setup](docs/setup.md) -- step-by-step setup with screenshots
+- [Setup](docs/setup.md) -- step-by-step setup
 - [Usage](docs/usage.md) -- full tool reference and examples
 - [ISH Mode](docs/ISH_MODE.md) -- testing with a local mock server
 
