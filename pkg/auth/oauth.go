@@ -254,7 +254,7 @@ func (a *Authenticator) revokeAtGoogle(ctx context.Context, value string) error 
 		log.Printf("auth: remote revoke request failed (transport error)")
 		return fmt.Errorf("revoke request: %w", err)
 	}
-	defer resp.Body.Close()
+	defer func() { _ = resp.Body.Close() }()
 
 	if resp.StatusCode < 200 || resp.StatusCode > 299 {
 		log.Printf("auth: remote revoke returned non-2xx status %d", resp.StatusCode)
